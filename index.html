@@ -161,6 +161,9 @@ const HOUSES = [
 
 const UNSORTED_HOUSE = {id:'unsorted', name:'Not Yet Sorted', color:'#8A94A6', mascot:'🎓', value:'—'};
 const houseById = id => HOUSES.find(h=>h.id===id) || UNSORTED_HOUSE;
+function distinctHomerooms(){
+  return Array.from(new Set(SCHOLARS.map(s=>s.homeroom).filter(Boolean))).sort();
+}
 
 let POS_CATEGORIES = [
   ['Service',1],['Perseverance',1],['Integrity',1],['Compassion',1],['Equity',1],
@@ -251,7 +254,9 @@ const state = {
   printMode:false, // true while showing the printable reference-sheet preview
   printSections:{pos:true, neg:true, rewards:true}, // which sections were checked when Preview & Print was clicked
   yearResetPreview:null, // set to a snapshot object while the "New School Year" confirmation panel is showing
+  demoHomeroom:null, // local-demo-mode only: which homeroom "My Class" previews, since there's no real teacher login to bind to
   pendingImport:null, // {scholars, missingBarcode, unsorted, previousCount} while the roster-import confirmation panel is showing
+  externalImport:null, // {stage:'mapping'|'preview', headers, rows, mapping, matched, unmatched} while a ClassDojo/external CSV import is in progress
 };
 
 function uid(p){return p+Math.random().toString(36).slice(2,9);}
@@ -519,6 +524,43 @@ function matchScholarByPhotoFilename(filename){
     (s.studentId && s.studentId.toLowerCase()===base) ||
     (s.id && s.id.toLowerCase()===base)
   ) || null;
+}
+/* ============================= EXTERNAL POINT IMPORT (e.g. ClassDojo) ============================= */
+// ClassDojo has no API for any third party — the only way data comes out is a CSV/spreadsheet
+// export a human downloads. Since we don't have a confirmed sample of that export's exact
+// column layout, this matches scholars by NAME (normalized, punctuation/extra-space tolerant)
+// rather than ID, and lets the admin map whichever columns the actual file turns out to have —
+// so it isn't locked to one specific format and should keep working even if that format changes.
+function normalizeNameForMatch(name){
+  return (name||'').toString().toLowerCase().replace(/[^a-z\s]/g,'').replace(/\s+/g,' ').trim();
+}
+function matchScholarByName(rawName){
+  const target = normalizeNameForMatch(rawName);
+  if(!target) return null;
+  // exact "first last" match first
+  let hit = SCHOLARS.find(s=> normalizeNameForMatch(s.first+' '+s.last)===target);
+  if(hit) return hit;
+  // fall back to "last first" order, in case the export writes names that way
+  hit = SCHOLARS.find(s=> normalizeNameForMatch(s.last+' '+s.first)===target);
+  if(hit) return hit;
+  return null;
+}
+// Turns parsed CSV rows into a matched/unmatched preview, given a column mapping the admin
+// confirmed (or the auto-guessed defaults). Doesn't touch any data yet — see confirmExternalPointImport.
+function buildExternalImportPreview(rows, mapping){
+  const matched = [];
+  const unmatched = [];
+  rows.forEach(row=>{
+    const rawName = (row[mapping.nameCol] ?? '').toString().trim();
+    const pointsRaw = row[mapping.pointsCol];
+    const points = typeof pointsRaw==='number' ? pointsRaw : parseFloat(pointsRaw);
+    if(!rawName || isNaN(points) || points===0) return; // skip blank/invalid rows silently
+    const category = (mapping.categoryCol && row[mapping.categoryCol]) ? String(row[mapping.categoryCol]).trim() : 'ClassDojo Import';
+    const scholar = matchScholarByName(rawName);
+    if(scholar) matched.push({scholar, points, category, rawName});
+    else unmatched.push({rawName, points, category});
+  });
+  return {matched, unmatched};
 }
 // Saves one scholar's photo. With Firebase configured, the resized image goes to Firebase
 // Storage (a separate file-storage service from Firestore — cheaper and faster for images)
@@ -859,6 +901,7 @@ const ROLE_LABELS = {admin:'Administrator', house_admin:'House Admin', teacher:'
 const NAV_ITEMS = [
   {id:'dashboard', label:'Dashboard', ic:'🏠', roles:['admin','house_admin','teacher']},
   {id:'scan', label:'Scan', ic:'📷', roles:['admin','house_admin','teacher','student']},
+  {id:'myclass', label:'My Class', ic:'🏫', roles:['teacher']},
   {id:'search', label:'Search', ic:'🔎', roles:['admin','house_admin','teacher']},
   {id:'leaderboard', label:'Leaders', ic:'🏆', roles:['admin','house_admin','teacher','student']},
   {id:'housecup', label:'House Cup', ic:'👑', roles:['admin','house_admin','teacher','student']},
@@ -1170,6 +1213,55 @@ function viewHouseCup(){
   </div>` : ''}`;
 }
 
+function viewMyClass(){
+  // Local demo mode has no real teacher login to read a homeroom from, so it uses a picker
+  // instead — lets you preview the page with any homeroom's roster. In the real Firebase-backed
+  // app, this always uses the signed-in teacher's own assigned homeroom, nothing else.
+  const homeroom = FIREBASE_ENABLED
+    ? (state.staffProfile && state.staffProfile.homeroom)
+    : (state.demoHomeroom || distinctHomerooms()[0] || null);
+
+  if(!homeroom){
+    return `<div class="card">
+      <h2>🏫 My Class</h2>
+      <div class="empty">No homeroom is assigned to your account yet. Ask your administrator to set it in Manage → Staff Accounts.</div>
+    </div>`;
+  }
+
+  const myScholars = SCHOLARS.filter(s=>s.homeroom===homeroom && s.status==='active').slice().sort((a,b)=>b.currentPoints-a.currentPoints);
+  const totalPoints = myScholars.reduce((a,s)=>a+s.currentPoints,0);
+  const avgPoints = myScholars.length ? Math.round(totalPoints/myScholars.length*10)/10 : 0;
+
+  return `
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+      <h2 style="margin:0;">🏫 My Class — ${homeroom}</h2>
+      ${!FIREBASE_ENABLED ? `<select onchange="App.setDemoHomeroom(this.value)">
+        ${distinctHomerooms().map(h=>`<option value="${h}" ${homeroom===h?'selected':''}>${h}</option>`).join('')}
+      </select>` : ''}
+    </div>
+    <div class="grid grid-3" style="margin-top:10px;">
+      ${statCard(myScholars.length,'Scholars')}
+      ${statCard(totalPoints,'Total Current Points')}
+      ${statCard(avgPoints,'Average per Scholar')}
+    </div>
+    <button class="btn btn-outline" style="margin-top:10px;" onclick="App.exportMyClass()">⬇ Download My Class (.xlsx)</button>
+  </div>
+
+  <div class="card">
+    <h2>Class Roster</h2>
+    ${myScholars.length ? `<table><thead><tr><th>#</th><th>Scholar</th><th>House</th><th>Current</th><th>Lifetime</th></tr></thead><tbody>
+      ${myScholars.map((s,i)=>`<tr style="cursor:pointer;" onclick="App.openScholarModal('${s.id}')">
+        <td>${i+1}</td>
+        <td style="display:flex;align-items:center;gap:8px;">${scholarAvatar(s,24)} ${fullName(s)}</td>
+        <td>${houseChip(houseById(s.houseId))}</td>
+        <td><strong>${s.currentPoints}</strong></td>
+        <td class="subtle">${s.lifetimePoints}</td>
+      </tr>`).join('')}
+    </tbody></table>` : '<div class="empty">No scholars found for this homeroom.</div>'}
+  </div>`;
+}
+
 function viewHouses(){
   const totals = houseTotals();
   return `<div class="grid grid-2">
@@ -1412,6 +1504,10 @@ function viewManage(){
             <option value="teacher" ${s.role==='teacher'?'selected':''}>Teacher / Staff</option>
             <option value="student" ${s.role==='student'?'selected':''}>Student View</option>
           </select>
+          ${s.role==='teacher' ? `<select onchange="App.updateStaffHomeroom('${s.id}', this.value)" style="min-width:130px;">
+            <option value="">(no homeroom set)</option>
+            ${distinctHomerooms().map(h=>`<option value="${h}" ${s.homeroom===h?'selected':''}>${h}</option>`).join('')}
+          </select>` : ''}
           ${s.role==='teacher' ? `<label style="display:flex;align-items:center;gap:4px;font-size:12px;white-space:nowrap;">
             <input type="checkbox" ${s.canSubtract!==false?'checked':''} onchange="App.toggleStaffCanSubtract('${s.id}', this.checked)" style="width:auto;"> Can subtract
           </label>` : ''}
@@ -1433,6 +1529,13 @@ function viewManage(){
         <option value="teacher">Teacher / Staff</option>
         <option value="house_admin">House Admin</option>
         <option value="admin">Administrator</option>
+      </select>
+    </div>
+    <div style="margin-bottom:10px;">
+      <label class="subtle" style="display:block;margin-bottom:4px;">Homeroom (only used for Teacher / Staff, for the "My Class" report — ignored for other roles)</label>
+      <select id="newStaffHomeroom">
+        <option value="">(no homeroom)</option>
+        ${distinctHomerooms().map(h=>`<option value="${h}">${h}</option>`).join('')}
       </select>
     </div>
     <label style="display:flex;align-items:center;gap:6px;margin-bottom:10px;font-size:13px;">
@@ -1638,6 +1741,63 @@ function viewManage(){
   </div>
 
   <div class="card">
+    <h2>📥 Import Points from ClassDojo (or any spreadsheet)</h2>
+    <p class="subtle">ClassDojo doesn't offer live sync to outside apps — the only way its point data comes out is a spreadsheet a School Leader or teacher downloads. Upload that file here and each row becomes its own point entry for the matching scholar, matched by name. Works with any CSV/Excel file that has a name column and a points column, not just ClassDojo's.</p>
+    <input type="file" id="externalImportFile" accept=".csv,.xlsx,.xls" onchange="App.uploadExternalImportFile(this.files[0])">
+
+    ${state.externalImport && state.externalImport.stage==='mapping' ? `
+      <div style="background:#F5F8FF;border:1.5px solid var(--navy);border-radius:10px;padding:14px;margin-top:12px;">
+        <strong>Match up the columns</strong>
+        <p class="subtle" style="margin-top:4px;">${state.externalImport.rows.length} rows found. Confirm which column is which (best guesses are pre-selected).</p>
+        <div class="grid grid-3" style="gap:10px;margin-top:10px;">
+          <div>
+            <label class="subtle" style="display:block;margin-bottom:4px;">Student Name column</label>
+            <select onchange="App.setExternalImportMapping('nameCol', this.value)">
+              ${state.externalImport.headers.map(h=>`<option value="${h}" ${state.externalImport.mapping.nameCol===h?'selected':''}>${h}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label class="subtle" style="display:block;margin-bottom:4px;">Points column</label>
+            <select onchange="App.setExternalImportMapping('pointsCol', this.value)">
+              ${state.externalImport.headers.map(h=>`<option value="${h}" ${state.externalImport.mapping.pointsCol===h?'selected':''}>${h}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label class="subtle" style="display:block;margin-bottom:4px;">Skill/Category column (optional)</label>
+            <select onchange="App.setExternalImportMapping('categoryCol', this.value)">
+              <option value="">(none — label all as "ClassDojo Import")</option>
+              ${state.externalImport.headers.map(h=>`<option value="${h}" ${state.externalImport.mapping.categoryCol===h?'selected':''}>${h}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:12px;">
+          <button class="btn btn-primary" onclick="App.previewExternalImport()">Preview Matches</button>
+          <button class="btn btn-outline" onclick="App.cancelExternalImport()">Cancel</button>
+        </div>
+      </div>
+    ` : ''}
+
+    ${state.externalImport && state.externalImport.stage==='preview' ? `
+      <div style="background:#FFF9EE;border:1.5px solid var(--gold);border-radius:10px;padding:14px;margin-top:12px;">
+        <strong>${state.externalImport.matched.length} entries matched to scholars${state.externalImport.unmatched.length ? ', '+state.externalImport.unmatched.length+' unmatched' : ''}.</strong>
+        <p class="subtle" style="margin-top:4px;">This will create ${state.externalImport.matched.length} individual point transactions — visible in History same as any other award, tagged "Imported from external point system."</p>
+        ${state.externalImport.unmatched.length ? `
+          <div style="margin-top:10px;max-height:160px;overflow-y:auto;">
+            <strong style="font-size:12px;">Unmatched names</strong> — these didn't match anyone in the roster (check spelling or nicknames):
+            <ul style="margin:6px 0 0 18px;font-size:12px;">${state.externalImport.unmatched.slice(0,50).map(u=>`<li>${u.rawName} (${u.points>0?'+':''}${u.points})</li>`).join('')}</ul>
+            ${state.externalImport.unmatched.length>50?`<div class="subtle">…and ${state.externalImport.unmatched.length-50} more.</div>`:''}
+          </div>
+        ` : ''}
+        <div style="display:flex;gap:10px;margin-top:12px;">
+          <button class="btn btn-primary" onclick="App.confirmExternalImport()" ${!state.externalImport.matched.length?'disabled':''}>Import ${state.externalImport.matched.length} Entries</button>
+          <button class="btn btn-outline" onclick="App.backToExternalImportMapping()">← Back</button>
+          <button class="btn btn-outline" onclick="App.cancelExternalImport()">Cancel</button>
+        </div>
+      </div>
+    ` : ''}
+  </div>
+
+  <div class="card">
     <h2>Scholar Management</h2>
     <div class="grid grid-3" style="margin-bottom:12px;">
       ${statCard(SCHOLARS.length,'Total Scholars')}
@@ -1779,6 +1939,7 @@ function render(){
     case 'leaderboard': body = viewLeaderboard(); break;
     case 'housecup': body = viewHouseCup(); break;
     case 'houses': body = viewHouses(); break;
+    case 'myclass': body = viewMyClass(); break;
     case 'badges': body = viewBadges(); break;
     case 'rewards': body = viewRewards(); break;
     case 'history': body = viewHistory(); break;
@@ -2127,6 +2288,23 @@ window.App = {
     }));
     downloadXLSX(rows, 'Audit Log', 'GWCA_Audit_Log_'+todayStamp()+'.xlsx');
   },
+  // --- My Class (teacher-scoped report) ---
+  setDemoHomeroom(h){ state.demoHomeroom = h; render(); },
+  exportMyClass(){
+    const homeroom = FIREBASE_ENABLED
+      ? (state.staffProfile && state.staffProfile.homeroom)
+      : (state.demoHomeroom || distinctHomerooms()[0] || null);
+    if(!homeroom){ toast('⚠ No homeroom assigned.'); return; }
+    const myScholars = SCHOLARS.filter(s=>s.homeroom===homeroom && s.status==='active').slice().sort((a,b)=>b.currentPoints-a.currentPoints);
+    const rows = myScholars.map(s=>({
+      'Scholar': fullName(s),
+      'House': houseById(s.houseId).name,
+      'Current Points': s.currentPoints,
+      'Lifetime Points': s.lifetimePoints,
+      'Badges Earned': badgesFor(s).join(', '),
+    }));
+    downloadXLSX(rows, homeroom, 'GWCA_'+homeroom.replace(/[^a-z0-9]/gi,'_')+'_'+todayStamp()+'.xlsx');
+  },
   // --- Competitions & Live Event Mode ---
   enterLiveMode(){ state.liveEventMode = true; render(); },
   exitLiveMode(){ state.liveEventMode = false; render(); },
@@ -2226,6 +2404,7 @@ window.App = {
     const password = document.getElementById('newStaffPassword').value || '';
     const role = document.getElementById('newStaffRole').value;
     const canSubtract = document.getElementById('newStaffCanSubtract').checked;
+    const homeroom = document.getElementById('newStaffHomeroom').value || '';
     if(!name || !email || !password){ toast('⚠ Enter a name, email, and temporary password.'); return; }
     if(password.length < 6){ toast('⚠ Password needs at least 6 characters (Firebase requirement).'); return; }
 
@@ -2237,13 +2416,13 @@ window.App = {
     secondaryApp.auth().createUserWithEmailAndPassword(email, password)
       .then(cred=>{
         const uid = cred.user.uid;
-        return db.collection('staff').doc(uid).set({name, email, role, canSubtract, createdAt:Date.now()});
+        return db.collection('staff').doc(uid).set({name, email, role, canSubtract, homeroom, createdAt:Date.now()});
       })
       .then(()=> secondaryApp.auth().signOut())
       .then(()=>{
         secondaryApp.delete();
         toast('✔ Account created for '+name+'. Tell them their email and temporary password so they can sign in.');
-        logAudit('Staff account created', name+' ('+email+', '+(ROLE_LABELS[role]||role)+')');
+        logAudit('Staff account created', name+' ('+email+', '+(ROLE_LABELS[role]||role)+(homeroom?', '+homeroom:'')+')');
         document.getElementById('newStaffName').value='';
         document.getElementById('newStaffEmail').value='';
         document.getElementById('newStaffPassword').value='';
@@ -2264,6 +2443,15 @@ window.App = {
       .then(()=>{
         toast('✔ Role updated.');
         logAudit('Staff role changed', (person?person.name:uid)+' → '+(ROLE_LABELS[newRole]||newRole));
+      })
+      .catch(err=> toast('⚠ Sync error: '+err.message));
+  },
+  updateStaffHomeroom(uid, homeroom){
+    const person = STAFF_LIST.find(s=>s.id===uid);
+    db.collection('staff').doc(uid).update({homeroom})
+      .then(()=>{
+        toast('✔ Homeroom updated.');
+        logAudit('Staff homeroom changed', (person?person.name:uid)+' → '+(homeroom||'(none)'));
       })
       .catch(err=> toast('⚠ Sync error: '+err.message));
   },
@@ -2387,6 +2575,66 @@ window.App = {
       toast('✔ '+summary);
       render();
     }
+  },
+  // --- External point import (ClassDojo or similar) ---
+  uploadExternalImportFile(file){
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (e)=>{
+      try{
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, {type:'array'});
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:''});
+        if(!rows.length){ toast('⚠ No rows found in that file.'); return; }
+        const headers = Object.keys(rows[0]);
+        // Best-guess auto-mapping from common header names — the admin can still correct any of these.
+        const guess = (patterns)=> headers.find(h=> patterns.some(p=> h.toLowerCase().includes(p))) || headers[0];
+        const mapping = {
+          nameCol: guess(['student','name','child']),
+          pointsCol: guess(['point','value','score']),
+          categoryCol: guess(['skill','category','behavior','reason']) || '',
+        };
+        state.externalImport = {stage:'mapping', headers, rows, mapping};
+        render();
+      }catch(err){
+        toast('⚠ Could not read that file: '+err.message);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  },
+  setExternalImportMapping(field, col){
+    if(!state.externalImport) return;
+    state.externalImport.mapping[field] = col;
+    render();
+  },
+  previewExternalImport(){
+    const imp = state.externalImport;
+    if(!imp) return;
+    if(!imp.mapping.nameCol || !imp.mapping.pointsCol){ toast('⚠ Pick at least a Name column and a Points column.'); return; }
+    const {matched, unmatched} = buildExternalImportPreview(imp.rows, imp.mapping);
+    imp.matched = matched;
+    imp.unmatched = unmatched;
+    imp.stage = 'preview';
+    render();
+  },
+  backToExternalImportMapping(){
+    if(!state.externalImport) return;
+    state.externalImport.stage = 'mapping';
+    render();
+  },
+  cancelExternalImport(){ state.externalImport = null; render(); },
+  confirmExternalImport(){
+    const imp = state.externalImport;
+    if(!imp || !imp.matched || !imp.matched.length) return;
+    imp.matched.forEach(entry=>{
+      const categoryObj = {name: entry.category};
+      applyTransaction(entry.scholar, categoryObj, entry.points, 'Imported from external point system');
+    });
+    const summary = imp.matched.length+' point'+(imp.matched.length===1?'':'s')+' entries imported for '+new Set(imp.matched.map(e=>e.scholar.id)).size+' scholars'+(imp.unmatched.length?', '+imp.unmatched.length+' unmatched name(s) skipped':'')+'.';
+    logAudit('External points imported', summary);
+    state.externalImport = null;
+    toast('✔ '+summary);
+    render();
   }
 };
 
