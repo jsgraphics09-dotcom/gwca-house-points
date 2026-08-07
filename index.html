@@ -126,12 +126,12 @@
    its config below. Full step-by-step instructions are in README.md.
    Leave this untouched to run in local-only demo mode (each browser has its own data). */
 const firebaseConfig = {
-  apiKey: "AIzaSyAuDwosAvdRqiJIPD-bDsGHlkfAD-pcNkg",
-  authDomain: "gwca-house-points.firebaseapp.com",
-  projectId: "gwca-house-points",
-  storageBucket: "gwca-house-points.firebasestorage.app",
-  messagingSenderId: "748462469091",
-  appId: "1:748462469091:web:04ae1560d5a9c856dfbad6"
+  apiKey: "PASTE_YOUR_API_KEY",
+  authDomain: "PASTE_YOUR_PROJECT.firebaseapp.com",
+  projectId: "PASTE_YOUR_PROJECT_ID",
+  storageBucket: "PASTE_YOUR_PROJECT.appspot.com",
+  messagingSenderId: "PASTE_YOUR_SENDER_ID",
+  appId: "PASTE_YOUR_APP_ID"
 };
 const FIREBASE_ENABLED = !!(firebaseConfig.apiKey && firebaseConfig.apiKey.indexOf('PASTE') === -1);
 // Add ?display=1 to this file's URL to open a read-only, auto-cycling scoreboard for a hallway TV
@@ -2502,6 +2502,7 @@ function startFirebaseSync(){
 }
 
 /* ============================= STAFF LOGIN BOOTSTRAP ============================= */
+let firebaseSyncStarted = false; // guards against starting the data connections more than once (onAuthStateChanged can fire again later, e.g. on token refresh)
 function startAuthListener(){
   firebase.auth().onAuthStateChanged(user=>{
     state.authChecking = false;
@@ -2523,6 +2524,13 @@ function startAuthListener(){
       state.tab = state.role==='student' ? 'scan' : 'dashboard';
       state.authError = null;
       render();
+      // Only NOW that sign-in is fully confirmed do we open the dozen-or-so Firestore data
+      // connections (scholars, transactions, categories, etc.). Starting these any earlier — in
+      // parallel with the sign-in check, rather than after it — meant they'd all get rejected by
+      // security rules requiring request.auth != null, since that brief window before sign-in
+      // resolves has no confirmed auth yet. That produced a burst of "Missing or insufficient
+      // permissions" errors on every load, with no automatic retry once a listener failed.
+      if(!firebaseSyncStarted){ firebaseSyncStarted = true; startFirebaseSync(); }
     }).catch(err=>{
       state.authError = 'Could not load your staff profile: ' + err.message;
       firebase.auth().signOut();
@@ -2550,8 +2558,7 @@ if(PUBLIC_DISPLAY_MODE){
   }, 12000);
 } else if(FIREBASE_ENABLED){
   render(); // show "Checking sign-in status…" immediately
-  startAuthListener();
-  startFirebaseSync();
+  startAuthListener(); // startFirebaseSync() now runs from inside here, only once sign-in is confirmed
 } else {
   checkForNotifications(); // silently seed badge/leader tracking so the first real change gets a toast
   render();
