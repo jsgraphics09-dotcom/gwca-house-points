@@ -98,7 +98,7 @@
   .chip.selected{border-color:var(--orange);background:#FFF1E8;color:var(--orange-dark);}
   .chip-cat{border:1.5px solid var(--line);background:#fff;border-radius:10px;padding:9px 12px;cursor:pointer;text-align:left;font-family:inherit;font-size:13px;}
   .chip-cat.selected{border-color:var(--navy);background:#EEF2F8;}
-  .toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 20px;border-radius:10px;z-index:100;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.25);}
+  .toast{position:fixed;top:76px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 20px;border-radius:10px;z-index:300;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:90vw;text-align:center;}
   .empty{color:var(--muted);font-size:13px;text-align:center;padding:24px 8px;}
   .badge-dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:5px;}
   .subtle{color:var(--muted);font-size:12px;}
@@ -1989,8 +1989,20 @@ window.App = {
   submitScan(code){
     if(!code || !code.trim()){ return; }
     const s = findByBarcode(code);
-    if(!s){ toast('⚠ Barcode not found: '+code); state.scanInput=''; render(); return; }
-    if(s.status!=='active'){ toast('⚠ '+fullName(s)+' is marked inactive.'); state.scanInput=''; render(); return; }
+    // Deliberately NOT clearing the input on a failed lookup — leaving the scanned code visible
+    // is exactly what lets someone spot a mis-scan or typo, instead of just a blank box and a
+    // toast that's already faded by the time they look up. Selecting the text means the very
+    // next scan overwrites it cleanly instead of the two barcodes running together.
+    if(!s){
+      toast('⚠ Barcode not found: '+code);
+      setTimeout(()=>{ const el=document.getElementById('barcodeInput'); if(el){ el.focus(); el.select(); } },50);
+      return;
+    }
+    if(s.status!=='active'){
+      toast('⚠ '+fullName(s)+' is marked inactive.');
+      setTimeout(()=>{ const el=document.getElementById('barcodeInput'); if(el){ el.focus(); el.select(); } },50);
+      return;
+    }
     state.selectedScholarId = s.id; state.scanInput=''; state.camOpen=false; render();
     setTimeout(()=>{ const el=document.getElementById('barcodeInput'); if(el) el.focus(); },50);
   },
@@ -2049,8 +2061,18 @@ window.App = {
   submitGlobalScan(code){
     if(!code || !code.trim()) return;
     const s = findByBarcode(code);
-    if(!s){ toast('⚠ Barcode not found: '+code); state.globalScanInput=''; render(); return; }
-    if(s.status!=='active'){ toast('⚠ '+fullName(s)+' is marked inactive.'); state.globalScanInput=''; render(); return; }
+    // Same reasoning as submitScan: leave the scanned code visible (and selected, so the next
+    // scan cleanly overwrites it) instead of an empty box and a toast that's easy to miss.
+    if(!s){
+      toast('⚠ Barcode not found: '+code);
+      setTimeout(()=>{ const el=document.getElementById('globalBarcodeInput'); if(el){ el.focus(); el.select(); } },50);
+      return;
+    }
+    if(s.status!=='active'){
+      toast('⚠ '+fullName(s)+' is marked inactive.');
+      setTimeout(()=>{ const el=document.getElementById('globalBarcodeInput'); if(el){ el.focus(); el.select(); } },50);
+      return;
+    }
     App.openScholarModal(s.id);
   },
   openScholarModal(id){
