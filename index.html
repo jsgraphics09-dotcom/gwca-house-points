@@ -139,7 +139,10 @@ const firebaseConfig = {
   appId: "1:748462469091:web:04ae1560d5a9c856dfbad6"
 };
 const FIREBASE_ENABLED = !!(firebaseConfig.apiKey && firebaseConfig.apiKey.indexOf('PASTE') === -1);
-const DISPLAY_MODE = new URLSearchParams(window.location.search).get('display') === '1';
+const PUBLIC_DISPLAY_MODE = (function(){
+  try { return new URLSearchParams(window.location.search).get('display') === '1'; }
+  catch(e){ return false; }
+})();
 let db = null;
 if (FIREBASE_ENABLED) {
   firebase.initializeApp(firebaseConfig);
@@ -232,6 +235,7 @@ const state = {
   houseCupParticipationSearch:'',
   houseCupChampionshipLocked:false,
   houseCupChampionLocked:false,
+  publicDisplaySlide:0,
   // --- staff login (only used when FIREBASE_ENABLED) ---
   authUser:null,           // firebase auth user object once signed in
   staffProfile:null,       // {name, role, houseId, canSubtract} loaded from Firestore 'staff' collection
@@ -346,12 +350,40 @@ function applyTransaction(scholar, categoryObj, amount, note){
     scholar.currentPoints=newCurrent; scholar.lifetimePoints=newLifetime; scholar.rewardBalance=newReward; scholar.lastScan=tx.ts;
     TRANSACTIONS.unshift(tx);
   }
+  checkForNotifications();
   return tx;
 }
+const BADGE_TIERS = [
+  {threshold:50,  label:'50 Point Club',  icon:'🥉'},
+  {threshold:75,  label:'75 Point Club',  icon:'🥈'},
+  {threshold:100, label:'100 Point Club', icon:'🥇'},
+  {threshold:250, label:'250 Point Club', icon:'🏆'},
+  {threshold:500, label:'500 Point Club', icon:'💎'},
+];
+let BADGE_SEEN={};
+let LAST_HOUSE_LEADER=null;
+let notificationsPrimed=false;
 function badgesFor(s){
-  const b=[];
-  [25,50,100,250,500].forEach(t=>{ if(s.lifetimePoints>=t) b.push(t+' Point Club'); });
-  return b;
+  return BADGE_TIERS.filter(t=>s.lifetimePoints>=t.threshold).map(t=>t.label);
+}
+function checkForNotifications(){
+  SCHOLARS.forEach(s=>{
+    const currentCount=badgesFor(s).length;
+    const seenCount=BADGE_SEEN[s.id]||0;
+    if(notificationsPrimed && currentCount>seenCount){
+      const newestTier=BADGE_TIERS.slice().reverse().find(t=>s.lifetimePoints>=t.threshold);
+      if(newestTier) toast('🎉 '+fullName(s)+' just earned the '+newestTier.icon+' '+newestTier.label+' badge!');
+    }
+    BADGE_SEEN[s.id]=currentCount;
+  });
+  const totals=houseTotals();
+  const leader=HOUSES.slice().sort((a,b)=>(totals[b.id]||0)-(totals[a.id]||0))[0];
+  const newLeaderId=leader?leader.id:null;
+  if(notificationsPrimed && LAST_HOUSE_LEADER && newLeaderId && newLeaderId!==LAST_HOUSE_LEADER){
+    toast('🏆 '+leader.name+' just took the lead in the House standings!');
+  }
+  LAST_HOUSE_LEADER=newLeaderId;
+  notificationsPrimed=true;
 }
 
 /* ============================= RENDER HELPERS ============================= */
@@ -425,6 +457,7 @@ const NAV_ITEMS = [
   {id:'search', label:'Search', ic:'🔎', roles:['admin','house_admin','teacher']},
   {id:'leaderboard', label:'Leaders', ic:'🏆', roles:['admin','house_admin','teacher','student']},
   {id:'houses', label:'Houses', ic:'🛡️', roles:['admin','house_admin','teacher','student']},
+  {id:'badges', label:'Badges', ic:'🏅', roles:['admin','house_admin','teacher','student']},
   {id:'rewards', label:'Rewards', ic:'🎁', roles:['admin','house_admin','teacher','student']},
   {id:'history', label:'History', ic:'📜', roles:['admin','house_admin','teacher']},
   {id:'rulebook', label:'Rulebook', ic:'📘', roles:['admin','house_admin','teacher','student']},
@@ -501,60 +534,67 @@ function scholarRow(s, onClick){
 
 /* ============================= VIEWS ============================= */
 
-function viewLiveDisplay(){
-  const totals=houseTotals();
-  const ranked=HOUSES.slice().sort((a,b)=>(totals[b.id]||0)-(totals[a.id]||0));
-  const leader=ranked[0];
-  const maxTotal=Math.max(1,...ranked.map(h=>totals[h.id]||0));
-  const now=new Date();
+const PUBLIC_DISPLAY_SLIDES=['housecup','topscholars','badges','events'];
+function renderPublicDisplay(){
+  const slide=PUBLIC_DISPLAY_SLIDES[state.publicDisplaySlide % PUBLIC_DISPLAY_SLIDES.length];
+  let inner='';
 
-  return `
-  <div style="min-height:100vh;background:linear-gradient(145deg,#07172d 0%,#0B1F3A 54%,#132a4d 100%);color:#fff;padding:32px 34px;font-family:'Inter',sans-serif;">
-    <div style="max-width:1500px;margin:0 auto;">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:28px;">
-        <div style="display:flex;align-items:center;gap:18px;">
-          <div style="width:74px;height:74px;border-radius:50%;background:var(--orange);display:flex;align-items:center;justify-content:center;font-size:40px;">🦁</div>
-          <div>
-            <div style="font-family:'Fjalla One',sans-serif;font-size:42px;line-height:1;">GWCA HOUSE STANDINGS</div>
-            <div style="font-size:16px;color:#B9C6DC;letter-spacing:.16em;text-transform:uppercase;margin-top:7px;">George Washington Carver Academy • Live Display</div>
+  if(slide==='housecup'){
+    const totals=houseTotals();
+    const maxTotal=Math.max(1,...HOUSES.map(h=>totals[h.id]||0));
+    const sorted=HOUSES.slice().sort((a,b)=>(totals[b.id]||0)-(totals[a.id]||0));
+    inner=`<h1 class="display" style="color:#fff;font-size:44px;margin:0 0 24px;">👑 House Standings</h1>
+      <div style="display:grid;gap:16px;">
+        ${sorted.map((h,i)=>`<div style="background:#fff;border-radius:16px;padding:18px 24px;display:flex;align-items:center;gap:18px;border-left:12px solid ${h.color};">
+          <div style="font-size:30px;width:48px;color:#132133;font-weight:800;">${i===0?'👑':'#'+(i+1)}</div>
+          <div class="house-crest" style="background:${h.color};width:66px;height:66px;overflow:hidden;flex-shrink:0;">${houseIcon(h,58)}</div>
+          <div style="flex:1;min-width:0;"><div class="display" style="font-size:28px;color:#132133;">${h.name}</div>
+            <div style="height:13px;background:#EEF1F6;border-radius:8px;margin-top:7px;overflow:hidden;"><div style="height:100%;width:${((totals[h.id]||0)/maxTotal)*100}%;background:${h.color};"></div></div>
           </div>
-        </div>
-        <div style="text-align:right;">
-          <div style="font-size:14px;color:#B9C6DC;text-transform:uppercase;letter-spacing:.12em;">Current Leader</div>
-          <div style="font-family:'Fjalla One',sans-serif;font-size:35px;color:${leader?leader.color:'#fff'};">${leader?leader.name:'—'}</div>
-          <div style="font-size:16px;font-weight:800;">${leader?(totals[leader.id]||0):0} POINTS</div>
-        </div>
-      </div>
+          <div class="display" style="font-size:34px;color:${h.color};">${totals[h.id]||0}</div>
+        </div>`).join('')}
+      </div>`;
+  } else if(slide==='topscholars'){
+    const top=SCHOLARS.filter(s=>s.status==='active').slice().sort((a,b)=>b.lifetimePoints-a.lifetimePoints).slice(0,10);
+    inner=`<h1 class="display" style="color:#fff;font-size:44px;margin:0 0 24px;">⭐ Top Scholars</h1>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        ${top.map((sc,i)=>{const h=houseById(sc.houseId);return `<div style="background:#fff;border-radius:15px;padding:16px 20px;display:flex;align-items:center;gap:14px;border-left:9px solid ${h.color};">
+          <div style="font-size:24px;font-weight:800;color:#132133;width:32px;">#${i+1}</div>
+          <div style="flex:1;"><div style="font-weight:800;font-size:20px;color:#132133;">${fullName(sc,true)}</div><div style="font-size:13px;color:#6B7686;">${h.name} • Grade ${sc.grade||'—'}</div></div>
+          <div class="display" style="font-size:27px;color:${h.color};">${sc.lifetimePoints}</div>
+        </div>`}).join('')}
+      </div>`;
+  } else if(slide==='badges'){
+    const tiers=BADGE_TIERS.slice().reverse();
+    const spotlight=tiers.find(t=>SCHOLARS.some(sc=>sc.status==='active'&&sc.lifetimePoints>=t.threshold))||tiers[tiers.length-1];
+    const earners=SCHOLARS.filter(sc=>sc.status==='active'&&sc.lifetimePoints>=spotlight.threshold).sort((a,b)=>b.lifetimePoints-a.lifetimePoints).slice(0,10);
+    inner=`<h1 class="display" style="color:#fff;font-size:44px;margin:0 0 8px;">${spotlight.icon} ${spotlight.label}</h1>
+      <div style="color:#B9C6DC;font-size:18px;margin-bottom:24px;">Celebrating scholars reaching Point Club milestones</div>
+      ${earners.length?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">${earners.map(sc=>{const h=houseById(sc.houseId);return `<div style="background:#fff;border-radius:15px;padding:18px 20px;border-left:9px solid ${h.color};display:flex;justify-content:space-between;align-items:center;gap:12px;">
+        <div><div style="font-weight:800;font-size:20px;color:#132133;">${fullName(sc,true)}</div><div style="font-size:13px;color:#6B7686;">${h.name}</div></div><div class="display" style="font-size:28px;color:${h.color};">${sc.lifetimePoints}</div>
+      </div>`}).join('')}</div>`:`<div style="background:#fff;border-radius:18px;padding:42px;text-align:center;color:#132133;font-size:22px;">The next scholar to reach ${spotlight.threshold} points earns this badge!</div>`}`;
+  } else {
+    const upcoming=(typeof HOUSE_CUP_EVENTS!=='undefined'?HOUSE_CUP_EVENTS:[]).filter(e=>e.status!=='Cancelled').slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).slice(0,8);
+    inner=`<h1 class="display" style="color:#fff;font-size:44px;margin:0 0 24px;">🎉 Upcoming House Events</h1>
+      ${upcoming.length?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">${upcoming.map(e=>`<div style="background:#fff;border-radius:16px;padding:20px 22px;color:#132133;border-top:7px solid #E8722C;">
+        <div style="font-size:13px;color:#6B7686;font-weight:800;text-transform:uppercase;">${hcDate(e.date)}</div>
+        <div class="display" style="font-size:24px;margin-top:5px;">${hcEsc(e.name)}</div>
+        <div style="font-size:13px;color:#6B7686;margin-top:5px;">${hcEsc(e.type)} • ${e.maxPoints||0} max pts</div>
+      </div>`).join('')}</div>`:`<div style="background:#fff;border-radius:18px;padding:42px;text-align:center;color:#132133;font-size:22px;">No upcoming House Cup events are scheduled.</div>`}`;
+  }
 
-      <div style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.13);border-radius:22px;padding:28px 30px;box-shadow:0 18px 45px rgba(0,0,0,.22);">
-        ${ranked.map((h,i)=>{
-          const pts=totals[h.id]||0;
-          const pct=(pts/maxTotal)*100;
-          return `<div style="display:grid;grid-template-columns:70px 82px minmax(160px,260px) 1fr 120px;align-items:center;gap:18px;padding:18px 0;${i<ranked.length-1?'border-bottom:1px solid rgba(255,255,255,.10);':''}">
-            <div style="font-family:'Fjalla One',sans-serif;font-size:44px;color:${i===0?'#FFD166':'#D7E0EC'};">${i+1}</div>
-            <div style="width:70px;height:70px;border-radius:18px;background:${h.color};display:flex;align-items:center;justify-content:center;font-size:34px;overflow:hidden;">
-              ${h.crestImage?`<img src="${h.crestImage}" alt="" style="width:100%;height:100%;object-fit:cover;">`:(h.emoji||'🦁')}
-            </div>
-            <div>
-              <div style="font-family:'Fjalla One',sans-serif;font-size:31px;color:#fff;">${h.name}</div>
-              <div style="font-size:13px;color:#B9C6DC;text-transform:uppercase;letter-spacing:.12em;">House ${i===0?'• Leading the Pride':''}</div>
-            </div>
-            <div style="height:25px;background:rgba(255,255,255,.11);border-radius:14px;overflow:hidden;">
-              <div style="height:100%;width:${pct}%;background:${h.color};border-radius:14px;transition:width .6s ease;"></div>
-            </div>
-            <div style="text-align:right;font-family:'Fjalla One',sans-serif;font-size:38px;">${pts}</div>
-          </div>`;
-        }).join('')}
+  const dots=PUBLIC_DISPLAY_SLIDES.map((_,i)=>`<span style="display:inline-block;width:10px;height:10px;border-radius:50%;margin:0 5px;background:${i===state.publicDisplaySlide?'#E8722C':'rgba(255,255,255,.35)'};"></span>`).join('');
+  return `<div style="min-height:100vh;background:linear-gradient(145deg,#07172d 0%,#0B1F3A 54%,#132a4d 100%);padding:34px 42px;font-family:'Inter',sans-serif;">
+    <div style="max-width:1500px;margin:0 auto;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;">
+        <div style="display:flex;align-items:center;gap:14px;"><div style="width:60px;height:60px;border-radius:50%;background:#E8722C;display:flex;align-items:center;justify-content:center;font-size:34px;">🦁</div><div><div class="display" style="font-size:30px;color:#fff;">GWCA HOUSE POINT SYSTEM</div><div style="color:#B9C6DC;font-size:12px;letter-spacing:.15em;text-transform:uppercase;">Live Rotating Display</div></div></div>
+        <div>${dots}</div>
       </div>
-
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px;color:#AFC0D7;font-size:13px;">
-        <div>Live data updates automatically.</div>
-        <div>${now.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric',year:'numeric'})}</div>
-      </div>
+      ${inner}
+      <div style="margin-top:22px;text-align:right;color:#AFC0D7;font-size:12px;">Updates live • Next screen rotates automatically</div>
     </div>
   </div>`;
 }
-
 function viewDashboard(){
   const totals = houseTotals();
   const leader = HOUSES.slice().sort((a,b)=>totals[b.id]-totals[a.id])[0];
@@ -1381,6 +1421,55 @@ function viewHouses(){
   </div>`;
 }
 
+
+function viewBadges(){
+  const active=SCHOLARS.filter(s=>s.status==='active');
+  const tiers=BADGE_TIERS.slice().reverse();
+  const earners=active.filter(s=>s.lifetimePoints>=BADGE_TIERS[0].threshold);
+  const totalBadgesAwarded=active.reduce((sum,s)=>sum+badgesFor(s).length,0);
+  const topScholar=active.slice().sort((a,b)=>b.lifetimePoints-a.lifetimePoints)[0];
+  return `
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+      <div>
+        <h2 style="margin:0;">🏅 Point Club Badges</h2>
+        <p class="subtle" style="margin:6px 0 0;">Badges are earned automatically from Lifetime Points and never disappear when reward points are spent.</p>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:6px;font-weight:400;text-transform:none;letter-spacing:0;margin:0;">
+          <input type="checkbox" ${state.hideLastNames?'checked':''} onchange="App.toggleHideNames()" style="width:auto;"> Hide last names
+        </label>
+        <button class="btn btn-outline" onclick="App.exportBadges()">⬇ Export Badges</button>
+      </div>
+    </div>
+    <div class="grid grid-3" style="margin-top:14px;">
+      ${statCard(totalBadgesAwarded,'Total Badges Earned')}
+      ${statCard(earners.length,'Scholars With a Badge')}
+      ${statCard(topScholar?(state.hideLastNames?fullName(topScholar,true):fullName(topScholar)):'—','Most Lifetime Points')}
+    </div>
+  </div>
+  ${tiers.map(tier=>{
+    const qualifiers=active.filter(s=>s.lifetimePoints>=tier.threshold).sort((a,b)=>b.lifetimePoints-a.lifetimePoints);
+    return `<div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:10px;">
+        <h2 style="margin:0;">${tier.icon} ${tier.label}</h2>
+        <span class="subtle">${qualifiers.length} scholar${qualifiers.length===1?'':'s'}</span>
+      </div>
+      ${qualifiers.length?`
+        <div style="max-height:300px;overflow-y:auto;">
+          <table><thead><tr><th>Scholar</th><th>House</th><th>Lifetime Points</th></tr></thead><tbody>
+            ${qualifiers.map(sc=>`<tr style="cursor:pointer;" onclick="App.openScholarModal('${sc.id}')">
+              <td>${state.hideLastNames?fullName(sc,true):fullName(sc)}</td>
+              <td>${houseChip(houseById(sc.houseId))}</td>
+              <td><strong>${sc.lifetimePoints}</strong></td>
+            </tr>`).join('')}
+          </tbody></table>
+        </div>`:
+        `<div class="empty">No one has reached ${tier.threshold} lifetime points yet.</div>`}
+    </div>`;
+  }).join('')}`;
+}
+
 function viewRewards(){
   const s = state.selectedScholarId ? SCHOLARS.find(x=>x.id===state.selectedScholarId) : null;
   return `
@@ -1516,8 +1605,8 @@ function renderGlobalModal(){
 
 /* ============================= MAIN RENDER ============================= */
 function render(){
-  if(DISPLAY_MODE){
-    document.getElementById('app').innerHTML = viewLiveDisplay();
+  if(PUBLIC_DISPLAY_MODE){
+    document.getElementById('app').innerHTML = renderPublicDisplay();
     return;
   }
   if(FIREBASE_ENABLED && !state.authUser){
@@ -1532,6 +1621,7 @@ function render(){
     case 'search': body = viewScanSearch('search'); break;
     case 'leaderboard': body = viewLeaderboard(); break;
     case 'houses': body = viewHouses(); break;
+    case 'badges': body = viewBadges(); break;
     case 'rewards': body = viewRewards(); break;
     case 'history': body = viewHistory(); break;
     case 'rulebook': body = viewRulebook(); break;
@@ -1721,6 +1811,21 @@ window.App = {
     state.entry={mode:null,category:null,custom:null,note:'',error:null};
     render();
   },
+  exportBadges(){
+    const rows=SCHOLARS.filter(sc=>badgesFor(sc).length>0).map(sc=>({
+      'Scholar':fullName(sc),
+      'House':houseById(sc.houseId).name,
+      'Grade':sc.grade,
+      'Lifetime Points':sc.lifetimePoints,
+      'Badge Count':badgesFor(sc).length,
+      'Badges Earned':badgesFor(sc).join(', ')
+    })).sort((a,b)=>b['Lifetime Points']-a['Lifetime Points']);
+    if(!rows.length){toast('⚠ No badges have been earned yet.');return}
+    const ws=XLSX.utils.json_to_sheet(rows),wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,'Badges');
+    XLSX.writeFile(wb,'GWCA_Badges_'+new Date().toISOString().slice(0,10)+'.xlsx');
+    toast('✔ Badge report downloaded.');
+  },
   toggleHideNames(){ state.hideLastNames=!state.hideLastNames; render(); },
   clearScholarForRewards(){ state.selectedScholarId=null; state.searchQuery=''; render(); },
   pickScholarForRewards(id){ state.selectedScholarId=id; state.searchQuery=''; render(); },
@@ -1854,6 +1959,7 @@ function startFirebaseSync(){
       scholarsRef.onSnapshot(snap=>{
         SCHOLARS = snap.docs.map(d=>d.data());
         SYNC_READY = true;
+        if(!PUBLIC_DISPLAY_MODE) checkForNotifications();
         render();
       }, err=> toast('⚠ Sync error: '+err.message));
 
@@ -1901,11 +2007,26 @@ function startAuthListener(){
   });
 }
 
-if(FIREBASE_ENABLED){
+if(PUBLIC_DISPLAY_MODE){
+  render();
+  if(FIREBASE_ENABLED){
+    firebase.auth().signInAnonymously()
+      .then(()=>startFirebaseSync())
+      .catch(err=>{
+        toast('⚠ Public Display could not connect: '+err.message);
+        startFirebaseSync();
+      });
+  }
+  setInterval(()=>{
+    state.publicDisplaySlide=(state.publicDisplaySlide+1)%PUBLIC_DISPLAY_SLIDES.length;
+    render();
+  },12000);
+} else if(FIREBASE_ENABLED){
   render(); // show "Checking sign-in status…" immediately
   startAuthListener();
   startFirebaseSync();
 } else {
+  checkForNotifications();
   render();
 }
 </script>
