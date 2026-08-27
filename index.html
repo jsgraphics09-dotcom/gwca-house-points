@@ -139,6 +139,7 @@ const firebaseConfig = {
   appId: "1:748462469091:web:04ae1560d5a9c856dfbad6"
 };
 const FIREBASE_ENABLED = !!(firebaseConfig.apiKey && firebaseConfig.apiKey.indexOf('PASTE') === -1);
+const DISPLAY_MODE = new URLSearchParams(window.location.search).get('display') === '1';
 let db = null;
 if (FIREBASE_ENABLED) {
   firebase.initializeApp(firebaseConfig);
@@ -499,6 +500,61 @@ function scholarRow(s, onClick){
 }
 
 /* ============================= VIEWS ============================= */
+
+function viewLiveDisplay(){
+  const totals=houseTotals();
+  const ranked=HOUSES.slice().sort((a,b)=>(totals[b.id]||0)-(totals[a.id]||0));
+  const leader=ranked[0];
+  const maxTotal=Math.max(1,...ranked.map(h=>totals[h.id]||0));
+  const now=new Date();
+
+  return `
+  <div style="min-height:100vh;background:linear-gradient(145deg,#07172d 0%,#0B1F3A 54%,#132a4d 100%);color:#fff;padding:32px 34px;font-family:'Inter',sans-serif;">
+    <div style="max-width:1500px;margin:0 auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:28px;">
+        <div style="display:flex;align-items:center;gap:18px;">
+          <div style="width:74px;height:74px;border-radius:50%;background:var(--orange);display:flex;align-items:center;justify-content:center;font-size:40px;">🦁</div>
+          <div>
+            <div style="font-family:'Fjalla One',sans-serif;font-size:42px;line-height:1;">GWCA HOUSE STANDINGS</div>
+            <div style="font-size:16px;color:#B9C6DC;letter-spacing:.16em;text-transform:uppercase;margin-top:7px;">George Washington Carver Academy • Live Display</div>
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:14px;color:#B9C6DC;text-transform:uppercase;letter-spacing:.12em;">Current Leader</div>
+          <div style="font-family:'Fjalla One',sans-serif;font-size:35px;color:${leader?leader.color:'#fff'};">${leader?leader.name:'—'}</div>
+          <div style="font-size:16px;font-weight:800;">${leader?(totals[leader.id]||0):0} POINTS</div>
+        </div>
+      </div>
+
+      <div style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.13);border-radius:22px;padding:28px 30px;box-shadow:0 18px 45px rgba(0,0,0,.22);">
+        ${ranked.map((h,i)=>{
+          const pts=totals[h.id]||0;
+          const pct=(pts/maxTotal)*100;
+          return `<div style="display:grid;grid-template-columns:70px 82px minmax(160px,260px) 1fr 120px;align-items:center;gap:18px;padding:18px 0;${i<ranked.length-1?'border-bottom:1px solid rgba(255,255,255,.10);':''}">
+            <div style="font-family:'Fjalla One',sans-serif;font-size:44px;color:${i===0?'#FFD166':'#D7E0EC'};">${i+1}</div>
+            <div style="width:70px;height:70px;border-radius:18px;background:${h.color};display:flex;align-items:center;justify-content:center;font-size:34px;overflow:hidden;">
+              ${h.crestImage?`<img src="${h.crestImage}" alt="" style="width:100%;height:100%;object-fit:cover;">`:(h.emoji||'🦁')}
+            </div>
+            <div>
+              <div style="font-family:'Fjalla One',sans-serif;font-size:31px;color:#fff;">${h.name}</div>
+              <div style="font-size:13px;color:#B9C6DC;text-transform:uppercase;letter-spacing:.12em;">House ${i===0?'• Leading the Pride':''}</div>
+            </div>
+            <div style="height:25px;background:rgba(255,255,255,.11);border-radius:14px;overflow:hidden;">
+              <div style="height:100%;width:${pct}%;background:${h.color};border-radius:14px;transition:width .6s ease;"></div>
+            </div>
+            <div style="text-align:right;font-family:'Fjalla One',sans-serif;font-size:38px;">${pts}</div>
+          </div>`;
+        }).join('')}
+      </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px;color:#AFC0D7;font-size:13px;">
+        <div>Live data updates automatically.</div>
+        <div>${now.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric',year:'numeric'})}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
 function viewDashboard(){
   const totals = houseTotals();
   const leader = HOUSES.slice().sort((a,b)=>totals[b.id]-totals[a.id])[0];
@@ -1460,6 +1516,10 @@ function renderGlobalModal(){
 
 /* ============================= MAIN RENDER ============================= */
 function render(){
+  if(DISPLAY_MODE){
+    document.getElementById('app').innerHTML = viewLiveDisplay();
+    return;
+  }
   if(FIREBASE_ENABLED && !state.authUser){
     document.getElementById('app').innerHTML = renderLoginScreen();
     return;
