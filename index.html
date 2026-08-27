@@ -219,6 +219,18 @@ const state = {
   globalScanInput:'',
   globalCamOpen:false,
   moreMenuOpen:false,
+  houseCupSection:'overview',
+  houseCupEditingId:null,
+  houseCupRosterEventId:'',
+  houseCupRosterHouseId:'',
+  houseCupRosterDivision:'K–2',
+  houseCupResultEventId:'',
+  houseCupResultDivision:'K–2',
+  houseCupParticipationHouse:'all',
+  houseCupParticipationDivision:'all',
+  houseCupParticipationSearch:'',
+  houseCupChampionshipLocked:false,
+  houseCupChampionLocked:false,
   // --- staff login (only used when FIREBASE_ENABLED) ---
   authUser:null,           // firebase auth user object once signed in
   staffProfile:null,       // {name, role, houseId, canSubtract} loaded from Firestore 'staff' collection
@@ -535,7 +547,554 @@ function viewDashboard(){
   `;
 }
 
+const HOUSE_CUP_DEFAULT_EVENTS = [
+  {id:'hc-sep11',date:'2026-09-11',name:'Cup Stack Showdown',type:'Individual',divisions:'K–2 / 3–5 / 6–8',competitors:'1 per division + alternate',maxPoints:30,status:'Upcoming',major:false,mystery:false,notes:''},
+  {id:'hc-sep18',date:'2026-09-18',name:'Giant Puzzle Race',type:'Group',divisions:'K–2 / 3–5 / 6–8',competitors:'Team event',maxPoints:60,status:'Upcoming',major:false,mystery:false,notes:''},
+  {id:'hc-sep25',date:'2026-09-25',name:'Free Throw Pressure',type:'Individual',divisions:'K–2 / 3–5 / 6–8',competitors:'1 per division + alternate',maxPoints:30,status:'Upcoming',major:false,mystery:false,notes:''},
+  {id:'hc-oct09',date:'2026-10-09',name:'Jump Rope Challenge',type:'Individual',divisions:'K–2 / 3–5 / 6–8',competitors:'1 per division + alternate',maxPoints:30,status:'Upcoming',major:false,mystery:false,notes:''},
+  {id:'hc-oct16',date:'2026-10-16',name:'Balloon Caterpillar',type:'Group',divisions:'K–2 / 3–5 / 6–8',competitors:'5 per division + alternate',maxPoints:60,status:'Upcoming',major:false,mystery:false,notes:''},
+  {id:'hc-oct23',date:'2026-10-23',name:'Memory Master',type:'Individual',divisions:'K–2 / 3–5 / 6–8',competitors:'1 per division + alternate',maxPoints:30,status:'Upcoming',major:false,mystery:false,notes:''},
+  {id:'hc-oct30',date:'2026-10-30',name:'House Spirit Battle',type:'Major House',divisions:'Whole House',competitors:'Whole House',maxPoints:100,status:'Upcoming',major:true,mystery:false,notes:''},
+  {id:'hc-nov06',date:'2026-11-06',name:'Hula Hoop Survivor',type:'Individual',divisions:'K–2 / 3–5 / 6–8',competitors:'1 per division + alternate',maxPoints:30,status:'Upcoming',major:false,mystery:false,notes:''},
+  {id:'hc-nov13',date:'2026-11-13',name:'Tower of Pride STEM Challenge',type:'Group',divisions:'K–2 / 3–5 / 6–8',competitors:'5 per division + alternate',maxPoints:60,status:'Upcoming',major:false,mystery:false,notes:''},
+  {id:'hc-nov20',date:'2026-11-20',name:'Puzzle Sprint',type:'Individual',divisions:'K–2 / 3–5 / 6–8',competitors:'1 per division + alternate',maxPoints:30,status:'Upcoming',major:false,mystery:false,notes:''},
+  {id:'hc-dec04',date:'2026-12-04',name:'Snowball Shot',type:'Individual',divisions:'K–2 / 3–5 / 6–8',competitors:'1 per division + alternate',maxPoints:30,status:'Upcoming',major:false,mystery:false,notes:''},
+  {id:'hc-dec11',date:'2026-12-11',name:'Holiday House Relay',type:'Group',divisions:'K–2 / 3–5 / 6–8',competitors:'6 per division + alternate',maxPoints:60,status:'Upcoming',major:false,mystery:false,notes:''},
+  {id:'hc-dec18',date:'2026-12-18',name:'Holiday House Challenge',type:'Major House',divisions:'Whole House',competitors:'Mixed teams',maxPoints:100,status:'Upcoming',major:true,mystery:false,notes:''},
+  {id:'hc-jan08',date:'2027-01-08',name:'Lion Dash',type:'Individual',divisions:'K–2 / 3–5 / 6–8',competitors:'1 per division + alternate',maxPoints:30,status:'Upcoming',major:false,mystery:false,notes:''},
+  {id:'hc-jan15',date:'2027-01-15',name:'House Trivia Battle',type:'Group',divisions:'K–2 / 3–5 / 6–8',competitors:'4 per division + alternate',maxPoints:60,status:'Upcoming',major:false,mystery:false,notes:''},
+  {id:'hc-jan22',date:'2027-01-22',name:'Balloon Keep-Up',type:'Individual',divisions:'K–2 / 3–5 / 6–8',competitors:'1 per division + alternate',maxPoints:30,status:'Upcoming',major:false,mystery:false,notes:''},
+  {id:'hc-feb05',date:'2027-02-05',name:'Basketball Knockout',type:'Individual',divisions:'K–2 / 3–5 / 6–8',competitors:'1 per division + alternate',maxPoints:30,status:'Upcoming',major:false,mystery:false,notes:''},
+  {id:'hc-feb12',date:'2027-02-12',name:'Giant Ball Relay',type:'Group',divisions:'K–2 / 3–5 / 6–8',competitors:'6 per division + alternate',maxPoints:60,status:'Upcoming',major:false,mystery:false,notes:''},
+  {id:'hc-feb19',date:'2027-02-19',name:'Cup Stack Championship',type:'Individual',divisions:'K–2 / 3–5 / 6–8',competitors:'1 per division + alternate',maxPoints:30,status:'Upcoming',major:false,mystery:false,notes:''},
+  {id:'hc-feb26',date:'2027-02-26',name:'The SPICE Games',type:'Major House',divisions:'Whole House',competitors:'Station teams',maxPoints:100,status:'Upcoming',major:true,mystery:false,notes:''},
+  {id:'hc-mar05',date:'2027-03-05',name:'Jump Rope Championship',type:'Individual',divisions:'K–2 / 3–5 / 6–8',competitors:'1 per division + alternate',maxPoints:30,status:'Upcoming',major:false,mystery:false,notes:''},
+  {id:'hc-mar12',date:'2027-03-12',name:'Rescue the Lion',type:'Group',divisions:'K–2 / 3–5 / 6–8',competitors:'6 per division + alternate',maxPoints:60,status:'Upcoming',major:false,mystery:false,notes:''},
+  {id:'hc-mar19',date:'2027-03-19',name:"Mystery Lion's Den",type:'Individual',divisions:'K–2 / 3–5 / 6–8',competitors:'1 per division + alternate',maxPoints:30,status:'Upcoming',major:false,mystery:true,notes:'Challenge remains secret until competition day.'},
+  {id:'hc-apr09',date:'2027-04-09',name:'Basketball Skills Challenge',type:'Individual',divisions:'K–2 / 3–5 / 6–8',competitors:'1 per division + alternate',maxPoints:30,status:'Upcoming',major:false,mystery:false,notes:''},
+  {id:'hc-apr16',date:'2027-04-16',name:'House Cup Relay',type:'Group',divisions:'K–2 / 3–5 / 6–8',competitors:'6 per division + alternate',maxPoints:60,status:'Upcoming',major:false,mystery:false,notes:''},
+  {id:'hc-apr23',date:'2027-04-23',name:'Precision Challenge',type:'Individual',divisions:'K–2 / 3–5 / 6–8',competitors:'1 per division + alternate',maxPoints:30,status:'Upcoming',major:false,mystery:false,notes:''},
+  {id:'hc-apr30',date:'2027-04-30',name:'House Pride Games',type:'Major House',divisions:'Whole House',competitors:'Multiple teams',maxPoints:100,status:'Upcoming',major:true,mystery:false,notes:''},
+  {id:'hc-may07',date:'2027-05-07',name:"Lion's Gauntlet",type:'Individual',divisions:'K–2 / 3–5 / 6–8',competitors:'1 per division + alternate',maxPoints:30,status:'Upcoming',major:false,mystery:false,notes:''},
+  {id:'hc-may14',date:'2027-05-14',name:'Tug-of-War Qualifier',type:'Group',divisions:'K–2 / 3–5 / 6–8',competitors:'8 per division + 2 alternates',maxPoints:60,status:'Upcoming',major:false,mystery:false,notes:'Determines Field Day seeding.'},
+  {id:'hc-may21',date:'2027-05-21',name:"Lion's Den Championship",type:'Individual',divisions:'K–2 / 3–5 / 6–8',competitors:'1 per division + alternate',maxPoints:30,status:'Upcoming',major:false,mystery:true,notes:'Challenge remains secret until competition day.'},
+  {id:'hc-may28',date:'2027-05-28',name:'Pride Quest',type:'Finale',divisions:'Mixed Age',competitors:'9 scholars + 2 alternates',maxPoints:75,status:'Upcoming',major:false,mystery:false,notes:'Regular-season standings lock after this event.'},
+  {id:'hc-fd01',date:'2027-06-07',name:'Pride Dash',type:'Field Day Standard',divisions:'K–2 / 3–5 / 6–8',competitors:'1 scholar per House per division',maxPoints:30,status:'Upcoming',major:false,mystery:false,notes:'Field Day standard event.'},
+  {id:'hc-fd02',date:'2027-06-07',name:'Sack Race',type:'Field Day Standard',divisions:'K–2 / 3–5 / 6–8',competitors:'1 scholar per House per division',maxPoints:30,status:'Upcoming',major:false,mystery:false,notes:'Field Day standard event.'},
+  {id:'hc-fd03',date:'2027-06-07',name:'Pride Target',type:'Field Day Standard',divisions:'K–2 / 3–5 / 6–8',competitors:'1 scholar per House per division',maxPoints:30,status:'Upcoming',major:false,mystery:false,notes:'Accuracy championship station.'},
+  {id:'hc-fd04',date:'2027-06-07',name:'Fill the Pride',type:'Field Day Standard',divisions:'Mixed / Whole House',competitors:'Team selected by House Leader',maxPoints:30,status:'Upcoming',major:false,mystery:false,notes:'Water relay championship station.'},
+  {id:'hc-fd05',date:'2027-06-07',name:'Basketball Pressure',type:'Field Day Standard',divisions:'K–2 / 3–5 / 6–8',competitors:'Designated shooters',maxPoints:30,status:'Upcoming',major:false,mystery:false,notes:'Field Day basketball challenge.'},
+  {id:'hc-fd06',date:'2027-06-07',name:'Pride Brain',type:'Field Day Standard',divisions:'Mixed / Whole House',competitors:'Mixed-age academic team',maxPoints:30,status:'Upcoming',major:false,mystery:false,notes:'Academic and SPICE championship station.'},
+  {id:'hc-fd07',date:'2027-06-07',name:'Rescue the Lion — Championship Edition',type:'Field Day Standard',divisions:'K–2 / 3–5 / 6–8',competitors:'Team per division',maxPoints:30,status:'Upcoming',major:false,mystery:false,notes:'Championship version of Rescue the Lion.'},
+  {id:'hc-fd08',date:'2027-06-07',name:'Giant House Relay',type:'Field Day Feature',divisions:'Mixed / Whole House',competitors:'12 scholars per House',maxPoints:60,status:'Upcoming',major:true,mystery:false,notes:'Feature championship event.'},
+  {id:'hc-fd09',date:'2027-06-07',name:'Tug-of-War Championship',type:'Field Day Feature',divisions:'K–2 / 3–5 / 6–8',competitors:'8 scholars per House per division',maxPoints:60,status:'Upcoming',major:true,mystery:false,notes:'May qualifier determines Field Day seeding.'},
+  {id:'hc-fd10',date:'2027-06-07',name:'Staff Pride Challenge',type:'Exhibition',divisions:'Mixed / Whole House',competitors:'3 staff members per House',maxPoints:0,status:'Upcoming',major:false,mystery:true,notes:'Exhibition only — no House Cup championship points.'},
+  {id:'hc-fd11',date:'2027-06-07',name:'House Spirit Championship',type:'Field Day Feature',divisions:'Mixed / Whole House',competitors:'Whole House',maxPoints:60,status:'Upcoming',major:true,mystery:false,notes:'Feature championship event.'},
+  {id:'hc-fd12',date:'2027-06-07',name:"The Lion's Last Roar",type:'Championship Final',divisions:'Mixed / Whole House',competitors:'6 scholars per House',maxPoints:100,status:'Upcoming',major:true,mystery:true,notes:'Top-secret final event. Final major opportunity to change the standings.'}
+];
+function loadHouseCupEvents(){
+  try{
+    const raw=localStorage.getItem('gwcaHouseCupEventsV1');
+    if(raw){
+      let saved=JSON.parse(raw);
+      // Migration from earlier House Cup builds:
+      // replace the old single 490-point Field Day umbrella with the individual championship events.
+      const hadOldFieldDay=saved.some(e=>e&&e.id==='hc-jun07');
+      if(hadOldFieldDay){
+        saved=saved.filter(e=>e&&e.id!=='hc-jun07');
+        const fieldDefaults=HOUSE_CUP_DEFAULT_EVENTS.filter(e=>String(e.id||'').startsWith('hc-fd'));
+        const existingIds=new Set(saved.map(e=>e.id));
+        fieldDefaults.forEach(e=>{ if(!existingIds.has(e.id)) saved.push({...e}); });
+        localStorage.setItem('gwcaHouseCupEventsV1',JSON.stringify(saved));
+      }
+      return saved;
+    }
+  }catch(e){}
+  const fresh=HOUSE_CUP_DEFAULT_EVENTS.map(e=>({...e}));
+  try{ localStorage.setItem('gwcaHouseCupEventsV1',JSON.stringify(fresh)); }catch(e){}
+  return fresh;
+}
+let HOUSE_CUP_EVENTS = loadHouseCupEvents();
+function saveHouseCupEvents(){ try{ localStorage.setItem('gwcaHouseCupEventsV1',JSON.stringify(HOUSE_CUP_EVENTS)); }catch(e){} }
+function hcEsc(v){ return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function hcDate(v){ if(!v) return 'No date'; const d=new Date(v+'T12:00:00'); return d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}); }
+
+function loadHouseCupRosters(){try{return JSON.parse(localStorage.getItem('gwcaHouseCupRostersV1')||'[]')}catch(e){return []}}
+let HOUSE_CUP_ROSTERS=loadHouseCupRosters();
+function saveHouseCupRosters(){try{localStorage.setItem('gwcaHouseCupRostersV1',JSON.stringify(HOUSE_CUP_ROSTERS))}catch(e){}}
+function hcDivisionForScholar(s){
+ const g=String(s.grade||'').trim().toUpperCase();
+ if(['K','KG','PK','PRE-K','PREK','KINDERGARTEN'].includes(g))return 'K–2';
+ const n=parseInt(g.replace(/[^0-9]/g,''),10);if(isNaN(n))return '';
+ return n<=2?'K–2':n<=5?'3–5':'6–8';
+}
+function hcCanEditRosterHouse(hid){
+ if(isAdmin())return true;
+ if(state.role==='house_admin'){const own=state.staffProfile&&state.staffProfile.houseId;return !FIREBASE_ENABLED||!own||own===hid}
+ return false;
+}
+function hcGetRoster(eid,hid,div){return HOUSE_CUP_ROSTERS.find(r=>r.eventId===eid&&r.houseId===hid&&r.division===div)||null}
+function hcParticipationCount(id){let n=0;HOUSE_CUP_ROSTERS.forEach(r=>n+=(r.competitors||[]).filter(x=>x===id).length);return n}
+function hcEventDivisions(e){
+ const x=String(e&&e.divisions||'').toLowerCase();
+ if(x.includes('mixed')||x.includes('whole'))return ['Mixed / Whole House'];
+ const a=[];if(x.includes('k')||x.includes('2'))a.push('K–2');if(x.includes('3')||x.includes('5'))a.push('3–5');if(x.includes('6')||x.includes('8'))a.push('6–8');
+ return a.length?[...new Set(a)]:['K–2','3–5','6–8'];
+}
+function hcDefaultSlots(e){
+ const m=String(e&&e.competitors||'').match(/(\d+)/);if(m)return Math.min(20,Math.max(1,parseInt(m[1])));
+ return e&&e.type==='Individual'?1:e&&e.type==='Group'?5:1;
+}
+function hcScholarOptions(hid,div,sel){
+ let a=SCHOLARS.filter(x=>x.status==='active'&&x.houseId===hid);
+ if(div!=='Mixed / Whole House')a=a.filter(x=>hcDivisionForScholar(x)===div);
+ a.sort((x,y)=>fullName(x).localeCompare(fullName(y)));
+ return '<option value="">— Select scholar —</option>'+a.map(x=>`<option value="${x.id}" ${sel===x.id?'selected':''}>${hcEsc(fullName(x))} • Grade ${hcEsc(x.grade||'—')} • ${hcParticipationCount(x.id)} prior</option>`).join('');
+}
+
+function loadHouseCupResults(){
+  try{return JSON.parse(localStorage.getItem('gwcaHouseCupResultsV1')||'[]')}catch(e){return []}
+}
+let HOUSE_CUP_RESULTS=loadHouseCupResults();
+function saveHouseCupResults(){
+  try{localStorage.setItem('gwcaHouseCupResultsV1',JSON.stringify(HOUSE_CUP_RESULTS))}catch(e){}
+}
+function houseCupPointTotals(){
+  const totals={}; HOUSES.forEach(h=>totals[h.id]=0);
+  HOUSE_CUP_RESULTS.forEach(r=>{
+    if(r && r.locked && r.pointsByHouse){
+      Object.keys(r.pointsByHouse).forEach(hid=>{
+        totals[hid]=(totals[hid]||0)+(parseInt(r.pointsByHouse[hid],10)||0);
+      });
+    }
+  });
+  return totals;
+}
+function viewHouseCupPoints(){
+  const totals=houseCupPointTotals();
+  const ranked=HOUSES.map(h=>({...h,points:totals[h.id]||0}))
+    .sort((a,b)=>b.points-a.points || a.name.localeCompare(b.name));
+  const locked=HOUSE_CUP_RESULTS.filter(r=>r&&r.locked).length;
+  const pending=HOUSE_CUP_RESULTS.filter(r=>r&&!r.locked).length;
+
+  return `
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+      <div>
+        <h2 style="margin-bottom:4px;">🏆 House Cup Points</h2>
+        <div class="subtle">These totals are separate from the regular scholar/House point system.</div>
+      </div>
+      <div class="chip-row">
+        <button class="chip" onclick="App.hcSection('overview')">Overview</button>
+        <button class="chip" onclick="App.hcSection('schedule')">Schedule</button>
+        <button class="chip" onclick="App.hcSection('rosters')">Rosters</button>
+        <button class="chip selected">Points</button><button class="chip" onclick="App.hcSection('participation')">Participation</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-2" style="margin-bottom:14px;">
+    <div class="stat"><div class="num">${locked}</div><div class="lbl">Locked Scored Events</div></div>
+    <div class="stat"><div class="num">${pending}</div><div class="lbl">Pending Results</div></div>
+  </div>
+
+  <div class="card">
+    <h2>🏆 House Cup Standings</h2>
+    <div class="subtle" style="margin-bottom:12px;">Only verified and locked House Cup competition results count here.</div>
+    ${ranked.map((h,i)=>`
+      <div class="bar-row" style="align-items:center;">
+        <div style="width:34px;font-family:'Fjalla One';font-size:22px;color:var(--navy);">${i+1}</div>
+        <div class="house-crest" style="background:${h.color||'var(--navy)'};width:38px;height:38px;font-size:18px;">${h.emoji||'🦁'}</div>
+        <div style="min-width:100px;flex:1;">
+          <div style="font-weight:800;">${hcEsc(h.name)}</div>
+          <div class="bar-track" style="margin-top:5px;">
+            <div class="bar-fill" style="width:${ranked[0].points?Math.max(4,(h.points/ranked[0].points)*100):0}%;background:${h.color||'var(--orange)'};"></div>
+          </div>
+        </div>
+        <div style="font-family:'Fjalla One';font-size:24px;color:var(--navy);min-width:58px;text-align:right;">${h.points}</div>
+      </div>`).join('')}
+  </div>
+
+  <div class="card">
+    <h2>ℹ️ How This Screen Works</h2>
+    <div class="subtle" style="line-height:1.7;">
+      House Cup points are intentionally kept separate from scholar current points, lifetime points, and store reward balances.
+      When we add the Results screen, completed competition placements will automatically calculate points here after results are verified and locked.
+    </div>
+  </div>`;
+}
+
+
+function hcScoringForEvent(e,divCount){
+  const t=String(e&&e.type||'').toLowerCase(), max=parseInt(e&&e.maxPoints,10)||0;
+  if(t.includes('exhibition') || max===0) return [0,0,0,0,0];
+  if(max===100) return [100,80,60,40,20];
+  if(max===75) return [75,60,45,30,15];
+  if(max===60) return divCount>1?[20,16,12,8,4]:[60,48,36,24,12];
+  if(max===30) return divCount>1?[10,8,6,4,2]:[30,24,18,12,6];
+  if(t.includes('individual')) return [10,8,6,4,2];
+  if(t.includes('group')) return [20,16,12,8,4];
+  if(t.includes('major')) return [100,80,60,40,20];
+  if(max>0) return [max,Math.round(max*.8),Math.round(max*.6),Math.round(max*.4),Math.round(max*.2)];
+  return [0,0,0,0,0];
+}
+function hcResultRecord(eventId,division){
+  return HOUSE_CUP_RESULTS.find(r=>r.eventId===eventId&&r.division===division)||null;
+}
+function hcEventResults(eventId){
+  return HOUSE_CUP_RESULTS.filter(r=>r.eventId===eventId);
+}
+function hcRebuildEventPointMaps(eventId){
+  const ev=HOUSE_CUP_EVENTS.find(e=>e.id===eventId); if(!ev)return;
+  const divs=hcEventDivisions(ev);
+  const recs=hcEventResults(eventId);
+  recs.forEach(r=>{
+    const scoring=hcScoringForEvent(ev,divs.length), map={};
+    (r.placements||[]).forEach((hid,i)=>{if(hid)map[hid]=scoring[i]||0});
+    r.pointsByHouse=map;
+  });
+  saveHouseCupResults();
+}
+
+function hcParticipationRows(){
+  const rows=[];
+  HOUSE_CUP_ROSTERS.forEach(r=>{
+    const ev=HOUSE_CUP_EVENTS.find(e=>e.id===r.eventId);
+    (r.competitors||[]).forEach(id=>{
+      const scholar=SCHOLARS.find(s=>s.id===id); if(!scholar)return;
+      rows.push({
+        scholarId:id,name:fullName(scholar),grade:scholar.grade||'',houseId:r.houseId,
+        division:r.division,eventId:r.eventId,eventName:ev?ev.name:r.eventId,
+        eventDate:ev?ev.date:'',role:'Competitor'
+      });
+    });
+    (r.alternates||[]).forEach(id=>{
+      const scholar=SCHOLARS.find(s=>s.id===id); if(!scholar)return;
+      rows.push({
+        scholarId:id,name:fullName(scholar),grade:scholar.grade||'',houseId:r.houseId,
+        division:r.division,eventId:r.eventId,eventName:ev?ev.name:r.eventId,
+        eventDate:ev?ev.date:'',role:'Alternate'
+      });
+    });
+  });
+  return rows;
+}
+function hcParticipationSummary(){
+  const rows=hcParticipationRows().filter(r=>r.role==='Competitor');
+  const map={};
+  rows.forEach(r=>{
+    if(!map[r.scholarId])map[r.scholarId]={scholarId:r.scholarId,name:r.name,grade:r.grade,houseId:r.houseId,count:0,lastDate:'',events:[]};
+    const x=map[r.scholarId]; x.count++; x.events.push(r.eventName);
+    if(String(r.eventDate)>String(x.lastDate))x.lastDate=r.eventDate;
+  });
+  return Object.values(map);
+}
+function hcEligibleHouseCounts(){
+  const out={};HOUSES.forEach(h=>out[h.id]={total:0,participated:0});
+  SCHOLARS.filter(s=>s.status==='active').forEach(s=>{if(out[s.houseId])out[s.houseId].total++});
+  const seen={};hcParticipationRows().filter(r=>r.role==='Competitor').forEach(r=>seen[r.scholarId]=true);
+  SCHOLARS.filter(s=>s.status==='active'&&seen[s.id]).forEach(s=>{if(out[s.houseId])out[s.houseId].participated++});
+  return out;
+}
+
+function loadHouseCupChampionshipState(){
+  try{return JSON.parse(localStorage.getItem('gwcaHouseCupChampionshipV1')||'{}')}catch(e){return {}}
+}
+let HOUSE_CUP_CHAMPIONSHIP=loadHouseCupChampionshipState();
+function saveHouseCupChampionshipState(){
+  try{localStorage.setItem('gwcaHouseCupChampionshipV1',JSON.stringify(HOUSE_CUP_CHAMPIONSHIP))}catch(e){}
+}
+function hcRegularSeasonTotals(){
+  const totals={};HOUSES.forEach(h=>totals[h.id]=0);
+  HOUSE_CUP_RESULTS.forEach(r=>{
+    if(!r||!r.locked||!r.pointsByHouse)return;
+    const ev=HOUSE_CUP_EVENTS.find(e=>e.id===r.eventId);
+    const isField=ev && (String(ev.type).toLowerCase().includes('championship') || String(ev.date||'').startsWith('2027-06'));
+    if(isField)return;
+    Object.keys(r.pointsByHouse).forEach(h=>totals[h]=(totals[h]||0)+(parseInt(r.pointsByHouse[h],10)||0));
+  });
+  return totals;
+}
+function hcFieldDayTotals(){
+  const totals={};HOUSES.forEach(h=>totals[h.id]=0);
+  HOUSE_CUP_RESULTS.forEach(r=>{
+    if(!r||!r.locked||!r.pointsByHouse)return;
+    const ev=HOUSE_CUP_EVENTS.find(e=>e.id===r.eventId);
+    const isField=ev && (String(ev.type).toLowerCase().includes('championship') || String(ev.date||'').startsWith('2027-06'));
+    if(!isField)return;
+    Object.keys(r.pointsByHouse).forEach(h=>totals[h]=(totals[h]||0)+(parseInt(r.pointsByHouse[h],10)||0));
+  });
+  return totals;
+}
+function hcFinalChampionshipTotals(){
+  const regular=HOUSE_CUP_CHAMPIONSHIP.regularSeasonSnapshot || hcRegularSeasonTotals();
+  const field=hcFieldDayTotals(), totals={};
+  HOUSES.forEach(h=>totals[h.id]=(regular[h.id]||0)+(field[h.id]||0));
+  return {regular,field,totals};
+}
+function hcFieldDayEvents(){
+  return HOUSE_CUP_EVENTS.filter(e=>
+    (String(e.type).toLowerCase().includes('championship') || String(e.type).toLowerCase().includes('field day') || String(e.date||'').startsWith('2027-06'))
+    && !String(e.type).toLowerCase().includes('exhibition')
+  );
+}
+function viewHouseCupChampionship(){
+  const calc=hcFinalChampionshipTotals();
+  const ranked=HOUSES.map(h=>({...h,regular:calc.regular[h.id]||0,field:calc.field[h.id]||0,total:calc.totals[h.id]||0}))
+    .sort((a,b)=>b.total-a.total || a.name.localeCompare(b.name));
+  const fieldEvents=hcFieldDayEvents();
+  const regLocked=!!HOUSE_CUP_CHAMPIONSHIP.regularSeasonLocked;
+  const finalLocked=!!HOUSE_CUP_CHAMPIONSHIP.finalChampionLocked;
+  const champion=finalLocked?ranked[0]:null;
+
+  return `<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+      <div><h2 style="margin-bottom:4px">🏆 Championship / Field Day Mode</h2>
+      <div class="subtle">Lock the regular season, run Field Day, and finalize the House Cup Champion.</div></div>
+      <div class="chip-row"><button class="chip" onclick="App.hcSection('overview')">Overview</button><button class="chip" onclick="App.hcSection('schedule')">Schedule</button><button class="chip" onclick="App.hcSection('rosters')">Rosters</button><button class="chip" onclick="App.hcSection('results')">Results</button><button class="chip" onclick="App.hcSection('points')">Points</button><button class="chip" onclick="App.hcSection('participation')">Participation</button><button class="chip selected">Championship</button></div>
+    </div></div>
+
+    <div class="grid grid-2" style="margin-bottom:14px">
+      <div class="stat"><div class="num">${regLocked?'🔒':'🔓'}</div><div class="lbl">Regular Season ${regLocked?'Locked':'Open'}</div></div>
+      <div class="stat"><div class="num">${finalLocked?'🏆':'—'}</div><div class="lbl">${finalLocked?'Champion Finalized':'Champion Not Finalized'}</div></div>
+    </div>
+
+    <div class="card">
+      <h2>📊 Championship Standings</h2>
+      <table><thead><tr><th>Rank</th><th>House</th><th>Regular Season</th><th>Field Day</th><th>Total</th></tr></thead><tbody>
+      ${ranked.map((h,i)=>`<tr><td><strong>${i+1}</strong></td><td><strong>${h.name}</strong></td><td>${h.regular}</td><td>${h.field}</td><td><strong>${h.total}</strong></td></tr>`).join('')}
+      </tbody></table>
+    </div>
+
+    <div class="card">
+      <h2>🔒 Regular Season Lock</h2>
+      <div class="subtle" style="line-height:1.7;margin-bottom:12px">
+        Use this after the final regular-season competition is verified. The app snapshots the House Cup totals at that moment so Field Day scoring can be tracked separately.
+      </div>
+      ${isAdmin()?(!regLocked
+        ?'<button class="btn btn-navy" onclick="App.hcLockRegularSeason()">🔒 Lock Regular Season</button>'
+        :'<button class="btn btn-outline" onclick="App.hcUnlockRegularSeason()">🔓 Unlock Regular Season Correction</button>'):'<span class="subtle">Administrator only.</span>'}
+    </div>
+
+    <div class="card">
+      <h2>🏟️ Field Day Events</h2>
+      ${fieldEvents.length?`<table><thead><tr><th>Date</th><th>Event</th><th>Type</th><th>Max</th><th>Status</th></tr></thead><tbody>${fieldEvents.map(e=>{
+        const recs=hcEventResults(e.id), locked=recs.length&&recs.every(r=>r.locked);
+        return `<tr><td>${hcDate(e.date)}</td><td><strong>${hcEsc(e.name)}</strong></td><td>${hcEsc(e.type)}</td><td>${e.maxPoints}</td><td>${recs.length?(locked?'🔒 Scored':'In progress'):'— Not scored'}</td></tr>`;
+      }).join('')}</tbody></table>`:'<div class="empty">No June/Championship events are in the Schedule yet. Add them in House Cup → Schedule.</div>'}
+    </div>
+
+    <div class="card">
+      <h2>🦁 Lion's Last Roar</h2>
+      <div class="subtle" style="line-height:1.7">
+        Keep the final mystery event in the Schedule as a Championship event with a maximum of 100 points. Enter and lock its results through the regular Results screen so those points flow into the Field Day total automatically.
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>🏆 Finalize Champion</h2>
+      ${finalLocked?`
+        <div style="text-align:center;padding:14px 6px">
+          <div style="font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">2026–2027 GWCA House Cup Champion</div>
+          <div style="font-family:'Fjalla One';font-size:44px;color:var(--navy);margin-top:6px">${champion?hcEsc(champion.name):'—'}</div>
+          <div style="font-size:20px;font-weight:800;color:var(--orange)">${champion?champion.total:0} POINTS</div>
+        </div>
+        ${isAdmin()?'<button class="btn btn-outline" onclick="App.hcUnlockChampion()">🔓 Reopen Final Results</button>':''}
+      `:`
+        <div class="subtle" style="line-height:1.7;margin-bottom:12px">
+          Finalize only after all Field Day results, including the Lion's Last Roar, have been verified and locked.
+        </div>
+        ${isAdmin()?'<button class="btn btn-primary" onclick="App.hcFinalizeChampion()">🏆 Finalize House Cup Champion</button>':'<span class="subtle">Administrator only.</span>'}
+      `}
+    </div>
+
+    <div class="card">
+      <h2>✅ Championship Checklist</h2>
+      <div style="line-height:1.9;font-size:13px">
+        ${regLocked?'✅':'⬜'} Regular-season standings locked<br>
+        ${fieldEvents.length?'✅':'⬜'} Field Day events scheduled<br>
+        ${fieldEvents.length && fieldEvents.every(e=>{const rs=hcEventResults(e.id);return rs.length&&rs.every(r=>r.locked)})?'✅':'⬜'} All scheduled Field Day results locked<br>
+        ${finalLocked?'✅':'⬜'} Final House Cup Champion locked
+      </div>
+    </div>`;
+}
+
+function viewHouseCupParticipation(){
+  const allRows=hcParticipationRows();
+  const summary=hcParticipationSummary();
+  const counts=hcEligibleHouseCounts();
+  const q=String(state.houseCupParticipationSearch||'').trim().toLowerCase();
+  const filtered=summary.filter(x=>{
+    if(state.houseCupParticipationHouse!=='all'&&x.houseId!==state.houseCupParticipationHouse)return false;
+    if(state.houseCupParticipationDivision!=='all'){
+      const scholar=SCHOLARS.find(s=>s.id===x.scholarId);
+      if(!scholar||hcDivisionForScholar(scholar)!==state.houseCupParticipationDivision)return false;
+    }
+    if(q&&!x.name.toLowerCase().includes(q)&&!String(x.grade).toLowerCase().includes(q))return false;
+    return true;
+  }).sort((a,b)=>b.count-a.count || a.name.localeCompare(b.name));
+
+  const never=SCHOLARS.filter(s=>s.status==='active')
+    .filter(s=>state.houseCupParticipationHouse==='all'||s.houseId===state.houseCupParticipationHouse)
+    .filter(s=>state.houseCupParticipationDivision==='all'||hcDivisionForScholar(s)===state.houseCupParticipationDivision)
+    .filter(s=>!summary.some(x=>x.scholarId===s.id))
+    .filter(s=>!q||fullName(s).toLowerCase().includes(q))
+    .sort((a,b)=>fullName(a).localeCompare(fullName(b)));
+
+  const totalUnique=summary.length;
+  const totalAppearances=summary.reduce((n,x)=>n+x.count,0);
+  const repeat3=summary.filter(x=>x.count>=3).length;
+
+  return `<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+      <div><h2 style="margin-bottom:4px">👥 House Cup Participation</h2>
+      <div class="subtle">Track who has represented each House and help spread opportunities across the Pride.</div></div>
+      <div class="chip-row"><button class="chip" onclick="App.hcSection('overview')">Overview</button><button class="chip" onclick="App.hcSection('schedule')">Schedule</button><button class="chip" onclick="App.hcSection('rosters')">Rosters</button><button class="chip" onclick="App.hcSection('results')">Results</button><button class="chip" onclick="App.hcSection('points')">Points</button><button class="chip selected">Participation</button><button class="chip" onclick="App.hcSection('championship')">Championship</button></div>
+    </div></div>
+
+    <div class="grid grid-3" style="margin-bottom:14px">
+      <div class="stat"><div class="num">${totalUnique}</div><div class="lbl">Unique Competitors</div></div>
+      <div class="stat"><div class="num">${totalAppearances}</div><div class="lbl">Competition Appearances</div></div>
+      <div class="stat"><div class="num">${repeat3}</div><div class="lbl">Scholars With 3+ Appearances</div></div>
+    </div>
+
+    <div class="card">
+      <div class="grid grid-3">
+        <label><strong>House</strong><select onchange="App.hcParticipationHouse(this.value)" style="width:100%;padding:9px;margin-top:5px"><option value="all">All Houses</option>${HOUSES.map(h=>`<option value="${h.id}" ${state.houseCupParticipationHouse===h.id?'selected':''}>${h.name}</option>`).join('')}</select></label>
+        <label><strong>Division</strong><select onchange="App.hcParticipationDivision(this.value)" style="width:100%;padding:9px;margin-top:5px"><option value="all">All Divisions</option>${['K–2','3–5','6–8'].map(d=>`<option ${state.houseCupParticipationDivision===d?'selected':''}>${d}</option>`).join('')}</select></label>
+        <label><strong>Search Scholar</strong><input type="text" value="${hcEsc(state.houseCupParticipationSearch||'')}" oninput="App.hcParticipationSearch(this.value)" placeholder="Name or grade" style="width:100%;padding:9px;margin-top:5px"></label>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>📊 House Participation Reach</h2>
+      ${HOUSES.map(h=>{
+        const c=counts[h.id]||{total:0,participated:0}, pct=c.total?Math.round((c.participated/c.total)*100):0;
+        return `<div class="bar-row"><div style="width:88px;font-weight:800">${h.name}</div><div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${h.color||'var(--orange)'}"></div></div><div style="width:92px;text-align:right;font-weight:700">${c.participated}/${c.total} • ${pct}%</div></div>`;
+      }).join('')}
+    </div>
+
+    <div class="card">
+      <h2>🏃 Competitor History</h2>
+      ${filtered.length?`<table><thead><tr><th>Scholar</th><th>House</th><th>Grade</th><th>Times</th><th>Last Event</th><th>Rotation</th></tr></thead><tbody>${filtered.map(x=>{
+        const h=houseById(x.houseId);
+        return `<tr><td><strong>${hcEsc(x.name)}</strong></td><td>${hcEsc(h.name)}</td><td>${hcEsc(x.grade)}</td><td><strong>${x.count}</strong></td><td>${x.lastDate?hcDate(x.lastDate):'—'}</td><td>${x.count>=4?'🔴 High use':x.count>=3?'🟠 Watch':'🟢 Good'}</td></tr>`;
+      }).join('')}</tbody></table>`:'<div class="empty">No matching competition participation yet.</div>'}
+    </div>
+
+    <div class="card">
+      <h2>🌱 Scholars With No House Cup Appearance Yet</h2>
+      <div class="subtle" style="margin-bottom:10px">Use this list when House Leaders are choosing future monthly rosters.</div>
+      ${never.length?`<table><thead><tr><th>Scholar</th><th>House</th><th>Grade</th><th>Division</th></tr></thead><tbody>${never.slice(0,150).map(x=>`<tr><td>${hcEsc(fullName(x))}</td><td>${hcEsc(houseById(x.houseId).name)}</td><td>${hcEsc(x.grade||'')}</td><td>${hcDivisionForScholar(x)||'—'}</td></tr>`).join('')}</tbody></table>${never.length>150?`<div class="subtle" style="margin-top:8px">Showing first 150 of ${never.length} scholars.</div>`:''}`:'<div class="empty">Every matching scholar has participated at least once.</div>'}
+    </div>
+
+    <div class="card">
+      <h2>ℹ️ Participation Rule</h2>
+      <div class="subtle" style="line-height:1.7">Alternates are recorded in roster history but do not count as a competition appearance unless they are later moved into a competitor slot. House Cup participation does not add championship points by itself.</div>
+    </div>`;
+}
+
+function viewHouseCupResults(){
+  const events=HOUSE_CUP_EVENTS.filter(e=>e.status!=='Cancelled').slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  if(!state.houseCupResultEventId&&events.length)state.houseCupResultEventId=events[0].id;
+  const ev=events.find(e=>e.id===state.houseCupResultEventId)||events[0]||null;
+  if(ev)state.houseCupResultEventId=ev.id;
+  const divs=hcEventDivisions(ev);
+  if(!divs.includes(state.houseCupResultDivision))state.houseCupResultDivision=divs[0]||'Mixed / Whole House';
+  const rec=ev?hcResultRecord(ev.id,state.houseCupResultDivision):null;
+  const scoring=hcScoringForEvent(ev,divs.length);
+  const placements=rec&&rec.placements||[];
+  const canEdit=isAdmin() && !(rec&&rec.locked);
+
+  return `<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+      <div><h2 style="margin-bottom:4px">🧾 Results & Automatic Scoring</h2>
+      <div class="subtle">Enter finishing order. House Cup points are calculated separately from regular scholar/House points.</div></div>
+      <div class="chip-row"><button class="chip" onclick="App.hcSection('overview')">Overview</button><button class="chip" onclick="App.hcSection('schedule')">Schedule</button><button class="chip" onclick="App.hcSection('rosters')">Rosters</button><button class="chip selected">Results</button><button class="chip" onclick="App.hcSection('points')">Points</button></div>
+    </div></div>
+    ${!ev?'<div class="card"><div class="empty">Add an event to the Schedule first.</div></div>':`
+    <div class="card"><div class="grid grid-2">
+      <label><strong>Competition</strong><select onchange="App.hcResultEvent(this.value)" style="width:100%;padding:9px;margin-top:5px">${events.map(e=>`<option value="${e.id}" ${e.id===ev.id?'selected':''}>${hcEsc(hcDate(e.date)+' — '+e.name)}</option>`).join('')}</select></label>
+      <label><strong>Division</strong><select onchange="App.hcResultDivision(this.value)" style="width:100%;padding:9px;margin-top:5px">${divs.map(d=>`<option ${d===state.houseCupResultDivision?'selected':''}>${d}</option>`).join('')}</select></label>
+    </div>
+    <div style="margin-top:12px;padding:10px;background:#F7F9FC;border:1px solid var(--line);border-radius:10px"><strong>${hcEsc(ev.name)}</strong> • ${hcEsc(ev.type)} • Event max ${ev.maxPoints} pts
+    <div class="subtle">This division scoring: ${scoring.join(' / ')} for 1st–5th.</div></div></div>
+
+    <form class="card" onsubmit="event.preventDefault();App.hcSaveResults(this)">
+      <input type="hidden" name="eventId" value="${ev.id}"><input type="hidden" name="division" value="${state.houseCupResultDivision}">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><h2>${state.houseCupResultDivision} Placements</h2>
+      <div>${rec&&rec.locked?'<span class="badge badge-green">🔒 LOCKED</span>':rec&&rec.verified?'<span class="badge badge-orange">✓ VERIFIED</span>':'<span class="badge badge-gray">DRAFT</span>'}</div></div>
+      <table><thead><tr><th>Place</th><th>House</th><th>Points</th></tr></thead><tbody>
+      ${[0,1,2,3,4].map(i=>`<tr><td><strong>${i+1}${i===0?'st':i===1?'nd':i===2?'rd':'th'}</strong></td><td><select name="place_${i}" ${canEdit?'':'disabled'} style="width:100%;padding:8px"><option value="">— Select House —</option>${HOUSES.map(h=>`<option value="${h.id}" ${placements[i]===h.id?'selected':''}>${h.name}</option>`).join('')}</select></td><td><strong>${scoring[i]||0}</strong></td></tr>`).join('')}
+      </tbody></table>
+      <label style="display:block;margin-top:14px"><strong>Official Notes</strong><textarea name="notes" rows="2" ${canEdit?'':'disabled'} style="width:100%;padding:9px;margin-top:5px">${hcEsc(rec&&rec.notes||'')}</textarea></label>
+      <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px">
+        ${isAdmin()&&!rec?.locked?'<button class="btn btn-navy" type="submit">💾 Save Draft</button>':''}
+        ${isAdmin()&&rec&&!rec.verified&&!rec.locked?'<button class="btn btn-outline" type="button" onclick="App.hcVerifyResults()">✓ Verify Results</button>':''}
+        ${isAdmin()&&rec&&rec.verified&&!rec.locked?'<button class="btn btn-orange" type="button" onclick="App.hcLockResults()">🔒 Lock & Award Points</button>':''}
+        ${isAdmin()&&rec&&rec.locked?'<button class="btn btn-outline" type="button" onclick="App.hcUnlockResults()">🔓 Unlock Correction</button>':''}
+      </div>
+    </form>
+
+    <div class="card"><h2>📊 Event Completion</h2><table><thead><tr><th>Division</th><th>Status</th></tr></thead><tbody>${divs.map(d=>{const x=hcResultRecord(ev.id,d);return `<tr><td>${d}</td><td>${x?(x.locked?'🔒 Locked':x.verified?'✓ Verified':'Draft'):'— Not entered'}</td></tr>`}).join('')}</tbody></table></div>`}`;
+}
+
+function viewHouseCupRosters(){
+ const events=HOUSE_CUP_EVENTS.filter(e=>e.status!=='Cancelled').slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+ if(!state.houseCupRosterEventId&&events.length)state.houseCupRosterEventId=events[0].id;
+ const ev=events.find(e=>e.id===state.houseCupRosterEventId)||events[0]||null;if(ev)state.houseCupRosterEventId=ev.id;
+ const houses=(state.role==='house_admin'&&FIREBASE_ENABLED&&state.staffProfile&&state.staffProfile.houseId)?HOUSES.filter(h=>h.id===state.staffProfile.houseId):HOUSES;
+ if(!state.houseCupRosterHouseId&&houses.length)state.houseCupRosterHouseId=houses[0].id;
+ if(!houses.some(h=>h.id===state.houseCupRosterHouseId)&&houses.length)state.houseCupRosterHouseId=houses[0].id;
+ const divs=hcEventDivisions(ev);if(!divs.includes(state.houseCupRosterDivision))state.houseCupRosterDivision=divs[0]||'K–2';
+ const r=ev?hcGetRoster(ev.id,state.houseCupRosterHouseId,state.houseCupRosterDivision):null, can=ev&&hcCanEditRosterHouse(state.houseCupRosterHouseId);
+ const cs=r?Math.max(r.competitorSlots||0,(r.competitors||[]).length,hcDefaultSlots(ev)):hcDefaultSlots(ev);
+ const as=r?Math.max(r.alternateSlots||0,(r.alternates||[]).length,1):1, comps=r&&r.competitors||[], alts=r&&r.alternates||[];
+ return `<div class="card"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><div><h2>👥 Monthly Competition Rosters</h2><div class="subtle">Choose representatives ahead of time. Each scholar's prior House Cup participation is shown to help rotate opportunities.</div></div><div class="chip-row"><button class="chip" onclick="App.hcSection('overview')">Overview</button><button class="chip" onclick="App.hcSection('schedule')">Schedule</button><button class="chip selected">Rosters</button><button class="chip" onclick="App.hcSection('results')">Results</button><button class="chip" onclick="App.hcSection('points')">Points</button></div></div></div>
+ ${!ev?'<div class="card"><div class="empty">Add an event to the Schedule first.</div></div>':`
+ <div class="card"><div class="grid grid-3">
+ <label><strong>Competition</strong><select onchange="App.hcRosterEvent(this.value)" style="width:100%;padding:9px;margin-top:5px">${events.map(e=>`<option value="${e.id}" ${e.id===ev.id?'selected':''}>${hcEsc(hcDate(e.date)+' — '+e.name)}</option>`).join('')}</select></label>
+ <label><strong>House</strong><select onchange="App.hcRosterHouse(this.value)" style="width:100%;padding:9px;margin-top:5px">${houses.map(h=>`<option value="${h.id}" ${h.id===state.houseCupRosterHouseId?'selected':''}>${h.name}</option>`).join('')}</select></label>
+ <label><strong>Division</strong><select onchange="App.hcRosterDivision(this.value)" style="width:100%;padding:9px;margin-top:5px">${divs.map(x=>`<option ${x===state.houseCupRosterDivision?'selected':''}>${x}</option>`).join('')}</select></label>
+ </div><div style="margin-top:12px;padding:10px;background:#F7F9FC;border:1px solid var(--line);border-radius:10px"><strong>${hcEsc(ev.name)}</strong> • ${hcEsc(ev.type)} • Max ${ev.maxPoints} pts ${ev.mystery?'• 🔥 Mystery / Lion’s Den':''}<div class="subtle">${hcEsc(ev.competitors||'')}</div></div></div>
+ <form class="card" onsubmit="event.preventDefault();App.hcSaveRoster(this)">
+ <input type="hidden" name="eventId" value="${ev.id}"><input type="hidden" name="houseId" value="${state.houseCupRosterHouseId}"><input type="hidden" name="division" value="${state.houseCupRosterDivision}">
+ <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><h2>${houseById(state.houseCupRosterHouseId).name} — ${state.houseCupRosterDivision}</h2><div class="subtle">${r?'Saved '+new Date(r.updatedAt).toLocaleString():'Not submitted yet'}</div></div>
+ <div class="grid grid-2"><label><strong>Competitor Slots</strong><input type="number" name="competitorSlots" min="1" max="20" value="${cs}" ${can?'':'disabled'} style="width:100%;padding:9px;margin-top:5px"></label><label><strong>Alternate Slots</strong><input type="number" name="alternateSlots" min="0" max="10" value="${as}" ${can?'':'disabled'} style="width:100%;padding:9px;margin-top:5px"></label></div>
+ <h3 style="margin:18px 0 8px">Competitors</h3><div class="grid grid-2">${Array.from({length:cs},(_,i)=>`<label><span class="subtle">Competitor ${i+1}</span><select name="competitor_${i}" ${can?'':'disabled'} style="width:100%;padding:9px;margin-top:4px">${hcScholarOptions(state.houseCupRosterHouseId,state.houseCupRosterDivision,comps[i]||'')}</select></label>`).join('')}</div>
+ <h3 style="margin:18px 0 8px">Alternates</h3><div class="grid grid-2">${Array.from({length:as},(_,i)=>`<label><span class="subtle">Alternate ${i+1}</span><select name="alternate_${i}" ${can?'':'disabled'} style="width:100%;padding:9px;margin-top:4px">${hcScholarOptions(state.houseCupRosterHouseId,state.houseCupRosterDivision,alts[i]||'')}</select></label>`).join('')}</div>
+ <label style="display:block;margin-top:16px"><strong>House Leader Notes</strong><textarea name="notes" rows="2" ${can?'':'disabled'} style="width:100%;padding:9px;margin-top:5px">${hcEsc(r&&r.notes||'')}</textarea></label>
+ <div style="display:flex;justify-content:flex-end;margin-top:16px">${can?'<button class="btn btn-navy" type="submit">✔ Save Roster</button>':'<span class="subtle">View only</span>'}</div></form>
+ <div class="card"><h2>📋 Event Roster Status</h2><table><thead><tr><th>House</th>${divs.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${HOUSES.map(h=>`<tr><td><strong>${h.name}</strong></td>${divs.map(x=>{const q=hcGetRoster(ev.id,h.id,x);return `<td>${q?`✔ ${(q.competitors||[]).length} selected`:'—'}</td>`}).join('')}</tr>`).join('')}</tbody></table></div>`}`;
+}
+function viewHouseCupSchedule(){
+  const events=HOUSE_CUP_EVENTS.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  return `<div class="card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;"><div><h2 style="margin-bottom:4px;">📅 Competition Schedule</h2><div class="subtle">Your season schedule is editable. Add your own events anytime.</div></div>${isAdmin()?'<button class="btn btn-navy" onclick="App.hcOpenEvent()">＋ Add Event</button>':''}</div></div>
+  <div class="card" style="overflow:auto;"><table><thead><tr><th>Date</th><th>Event</th><th>Type</th><th>Division</th><th>Max</th><th>Status</th>${isAdmin()?'<th>Actions</th>':''}</tr></thead><tbody>
+  ${events.map(e=>`<tr><td style="white-space:nowrap;"><strong>${hcDate(e.date)}</strong></td><td><strong>${hcEsc(e.name)}</strong>${e.major?' <span class="chip selected" style="font-size:10px;">Major</span>':''}${e.mystery?' <span class="chip" style="font-size:10px;">🔥 Mystery</span>':''}<div class="subtle">${hcEsc(e.competitors||'')}</div></td><td>${hcEsc(e.type)}</td><td>${hcEsc(e.divisions)}</td><td><strong>${hcEsc(e.maxPoints)}</strong></td><td>${hcEsc(e.status)}</td>${isAdmin()?`<td style="white-space:nowrap;"><button class="btn btn-outline" style="padding:6px 9px;font-size:11px;" onclick="App.hcOpenEvent('${e.id}')">Edit</button> <button class="btn btn-outline" style="padding:6px 9px;font-size:11px;" onclick="App.hcDuplicateEvent('${e.id}')">Copy</button></td>`:''}</tr>`).join('')}
+  </tbody></table></div>`;
+}
+function renderHouseCupEventModal(){
+  if(!state.houseCupEditingId) return '';
+  const isNew=state.houseCupEditingId==='__new__';
+  const e=isNew?{id:'',date:'',name:'',type:'Individual',divisions:'K–2 / 3–5 / 6–8',competitors:'',maxPoints:30,status:'Upcoming',major:false,mystery:false,notes:''}:HOUSE_CUP_EVENTS.find(x=>x.id===state.houseCupEditingId);
+  if(!e) return '';
+  return `<div class="modal-backdrop"><div class="modal-box" style="max-width:650px;"><button class="modal-close" onclick="App.hcCloseEvent()">✕</button><div class="modal-inner"><h2>${isNew?'＋ Add House Cup Event':'✏️ Edit Event'}</h2><form onsubmit="event.preventDefault();App.hcSaveEvent(this)">
+  <input type="hidden" name="id" value="${hcEsc(e.id)}"><div class="grid grid-2"><label><strong>Event Name</strong><input name="name" value="${hcEsc(e.name)}" required style="width:100%;padding:9px;margin-top:5px;"></label><label><strong>Date</strong><input type="date" name="date" value="${hcEsc(e.date)}" required style="width:100%;padding:9px;margin-top:5px;"></label></div>
+  <div class="grid grid-2" style="margin-top:12px;"><label><strong>Competition Type</strong><select name="type" style="width:100%;padding:9px;margin-top:5px;">${['Individual','Group','Major House','Finale','Championship','Custom'].map(x=>`<option ${e.type===x?'selected':''}>${x}</option>`).join('')}</select></label><label><strong>Maximum Points</strong><input type="number" min="0" name="maxPoints" value="${hcEsc(e.maxPoints)}" required style="width:100%;padding:9px;margin-top:5px;"></label></div>
+  <div class="grid grid-2" style="margin-top:12px;"><label><strong>Division(s)</strong><input name="divisions" value="${hcEsc(e.divisions)}" style="width:100%;padding:9px;margin-top:5px;"></label><label><strong>Competitors</strong><input name="competitors" value="${hcEsc(e.competitors)}" style="width:100%;padding:9px;margin-top:5px;"></label></div>
+  <div class="grid grid-2" style="margin-top:12px;"><label><strong>Status</strong><select name="status" style="width:100%;padding:9px;margin-top:5px;">${['Upcoming','Roster Open','Roster Submitted','Completed','Locked','Cancelled'].map(x=>`<option ${e.status===x?'selected':''}>${x}</option>`).join('')}</select></label><div style="padding-top:24px;"><label style="margin-right:15px;"><input type="checkbox" name="major" ${e.major?'checked':''}> Major Event</label><label><input type="checkbox" name="mystery" ${e.mystery?'checked':''}> Mystery / Lion’s Den</label></div></div>
+  <label style="display:block;margin-top:12px;"><strong>Notes / Instructions</strong><textarea name="notes" rows="3" style="width:100%;padding:9px;margin-top:5px;">${hcEsc(e.notes)}</textarea></label>
+  <div style="display:flex;justify-content:space-between;gap:10px;margin-top:16px;">${!isNew?'<button type="button" class="btn btn-outline" onclick="App.hcDeleteEvent(\''+e.id+'\')">Delete Event</button>':'<span></span>'}<div><button type="button" class="btn btn-outline" onclick="App.hcCloseEvent()">Cancel</button> <button type="submit" class="btn btn-navy">Save Event</button></div></div></form>
+  <div class="subtle" style="margin-top:12px;">This schedule is saved on this device/browser in this phase. Existing scholar and reward points are not changed.</div></div></div></div>`;
+}
 function viewHouseCup(){
+  if(state.houseCupSection==='schedule') return viewHouseCupSchedule();
+  if(state.houseCupSection==='rosters') return viewHouseCupRosters();
+  if(state.houseCupSection==='results') return viewHouseCupResults();
+  if(state.houseCupSection==='points') return viewHouseCupPoints();
+  if(state.houseCupSection==='participation') return viewHouseCupParticipation();
+  if(state.houseCupSection==='championship') return viewHouseCupChampionship();
   const totals = houseTotals();
   const ranked = HOUSES.slice().sort((a,b)=>totals[b.id]-totals[a.id]);
   const scoring = [
@@ -604,14 +1163,15 @@ function viewHouseCup(){
     <div class="card">
       <h2>⚙️ House Cup Module</h2>
       <div class="chip-row" style="margin-bottom:10px;">
-        <span class="chip selected" style="cursor:default;">✓ Overview</span>
-        <span class="chip" style="cursor:default;opacity:.65;">Schedule</span>
-        <span class="chip" style="cursor:default;opacity:.65;">Rosters</span>
-        <span class="chip" style="cursor:default;opacity:.65;">Results</span>
-        <span class="chip" style="cursor:default;opacity:.65;">Participation</span>
-        <span class="chip" style="cursor:default;opacity:.65;">Championship</span>
+        <button class="chip ${state.houseCupSection==='overview'?'selected':''}" onclick="App.hcSection('overview')">Overview</button>
+        <button class="chip ${state.houseCupSection==='schedule'?'selected':''}" onclick="App.hcSection('schedule')">Schedule</button>
+        <button class="chip ${state.houseCupSection==='rosters'?'selected':''}" onclick="App.hcSection('rosters')">Rosters</button>
+        <button class="chip ${state.houseCupSection==='points'?'selected':''}" onclick="App.hcSection('points')">Points</button>
+        <button class="chip ${state.houseCupSection==='results'?'selected':''}" onclick="App.hcSection('results')">Results</button>
+        <button class="chip ${state.houseCupSection==='participation'?'selected':''}" onclick="App.hcSection('participation')">Participation</button>
+        <button class="chip ${state.houseCupSection==='championship'?'selected':''}" onclick="App.hcSection('championship')">Championship</button>
       </div>
-      <div class="subtle">The Overview is active. The remaining House Cup tools will be added inside this same app—no second app required.</div>
+      <div class="subtle">All core House Cup tools are active: Schedule, Rosters, Results & Automatic Scoring, separate House Cup Points, Participation History, and Championship / Field Day Mode.</div>
     </div>
   </div>
   `;
@@ -925,6 +1485,7 @@ function render(){
     ${renderMobileNav()}
     ${state.toast?`<div class="toast">${state.toast}</div>`:''}
     ${renderGlobalModal()}
+    ${renderHouseCupEventModal()}
     ${renderMoreMenu()}
   `;
   if(state.camOpen) startCamera('camview');
@@ -953,6 +1514,114 @@ window.App = {
   },
   setTab(t){ state.tab=t; state.selectedScholarId=null; state.entry={mode:null,category:null,custom:null,note:'',error:null}; state.camOpen=false; state.globalPanel=null; state.globalCamOpen=false; state.moreMenuOpen=false; stopCamera(); render(); },
   toggleMoreMenu(){ state.moreMenuOpen=!state.moreMenuOpen; render(); },
+  hcSection(v){ state.houseCupSection=v; state.houseCupEditingId=null; render(); },
+  hcLockRegularSeason(){
+    if(!isAdmin())return;
+    if(HOUSE_CUP_CHAMPIONSHIP.regularSeasonLocked){toast('🔒 Regular season is already locked.');return}
+    if(!confirm('Lock the regular-season House Cup standings?'))return;
+    HOUSE_CUP_CHAMPIONSHIP.regularSeasonSnapshot=hcRegularSeasonTotals();
+    HOUSE_CUP_CHAMPIONSHIP.regularSeasonLocked=true;
+    HOUSE_CUP_CHAMPIONSHIP.regularSeasonLockedAt=Date.now();
+    saveHouseCupChampionshipState();toast('🔒 Regular season locked.');render();
+  },
+  hcUnlockRegularSeason(){
+    if(!isAdmin())return;
+    if(!confirm('Unlock the regular-season snapshot for correction?'))return;
+    HOUSE_CUP_CHAMPIONSHIP.regularSeasonLocked=false;
+    delete HOUSE_CUP_CHAMPIONSHIP.regularSeasonSnapshot;
+    saveHouseCupChampionshipState();toast('🔓 Regular season reopened.');render();
+  },
+  hcFinalizeChampion(){
+    if(!isAdmin())return;
+    if(!HOUSE_CUP_CHAMPIONSHIP.regularSeasonLocked){toast('⚠ Lock the regular season first.');return}
+    const events=hcFieldDayEvents();
+    if(!events.length){toast('⚠ Add the Field Day championship events first.');return}
+    const incomplete=events.some(e=>{const rs=hcEventResults(e.id);return !rs.length||!rs.every(r=>r.locked)});
+    if(incomplete){toast('⚠ Lock all scored Field Day results before finalizing the champion.');return}
+    const lastRoar=events.find(e=>String(e.name).toLowerCase().includes("lion's last roar") || String(e.name).toLowerCase().includes('lion’s last roar'));
+    if(!lastRoar || !hcEventResults(lastRoar.id).length || !hcEventResults(lastRoar.id).every(r=>r.locked)){
+      toast("⚠ The Lion's Last Roar must be completed and locked first.");return;
+    }
+    if(!confirm('Finalize and lock the 2026–2027 House Cup Champion?'))return;
+    HOUSE_CUP_CHAMPIONSHIP.finalChampionLocked=true;
+    HOUSE_CUP_CHAMPIONSHIP.finalChampionLockedAt=Date.now();
+    saveHouseCupChampionshipState();toast('🏆 House Cup Champion finalized!');render();
+  },
+  hcUnlockChampion(){
+    if(!isAdmin())return;
+    if(!confirm('Reopen the final championship results?'))return;
+    HOUSE_CUP_CHAMPIONSHIP.finalChampionLocked=false;
+    saveHouseCupChampionshipState();toast('🔓 Final championship reopened.');render();
+  },
+  hcParticipationHouse(v){state.houseCupParticipationHouse=v;render();},
+  hcParticipationDivision(v){state.houseCupParticipationDivision=v;render();},
+  hcParticipationSearch(v){state.houseCupParticipationSearch=v;render();},
+  hcResultEvent(v){state.houseCupResultEventId=v;state.houseCupResultDivision='K–2';render();},
+  hcResultDivision(v){state.houseCupResultDivision=v;render();},
+  hcSaveResults(form){
+    if(!isAdmin())return;
+    const fd=new FormData(form),eid=String(fd.get('eventId')||''),div=String(fd.get('division')||'');
+    const placements=[0,1,2,3,4].map(i=>String(fd.get('place_'+i)||''));
+    if(placements.some(x=>!x)){toast('⚠ Select all five finishing places.');return}
+    if(new Set(placements).size!==5){toast('⚠ Each House can only appear once.');return}
+    const existing=hcResultRecord(eid,div); if(existing&&existing.locked){toast('🔒 Unlock the result before editing.');return}
+    const ev=HOUSE_CUP_EVENTS.find(e=>e.id===eid), scoring=hcScoringForEvent(ev,hcEventDivisions(ev).length),pointsByHouse={};
+    placements.forEach((hid,i)=>pointsByHouse[hid]=scoring[i]||0);
+    const obj={eventId:eid,division:div,placements,pointsByHouse,notes:String(fd.get('notes')||''),verified:false,locked:false,updatedAt:Date.now()};
+    const at=HOUSE_CUP_RESULTS.findIndex(r=>r.eventId===eid&&r.division===div);if(at>=0)HOUSE_CUP_RESULTS[at]=obj;else HOUSE_CUP_RESULTS.push(obj);
+    saveHouseCupResults();toast('💾 Results draft saved.');render();
+  },
+  hcVerifyResults(){
+    if(!isAdmin())return;const r=hcResultRecord(state.houseCupResultEventId,state.houseCupResultDivision);if(!r||r.locked)return;
+    r.verified=true;r.verifiedAt=Date.now();saveHouseCupResults();toast('✓ Results verified.');render();
+  },
+  hcLockResults(){
+    if(!isAdmin())return;const r=hcResultRecord(state.houseCupResultEventId,state.houseCupResultDivision);if(!r||!r.verified)return;
+    r.locked=true;r.lockedAt=Date.now();saveHouseCupResults();toast('🔒 Results locked. House Cup points awarded.');render();
+  },
+  hcUnlockResults(){
+    if(!isAdmin())return;const r=hcResultRecord(state.houseCupResultEventId,state.houseCupResultDivision);if(!r||!r.locked)return;
+    if(!confirm('Unlock these House Cup results for correction? The points will temporarily leave the House Cup standings until re-locked.'))return;
+    r.locked=false;r.verified=false;r.unlockedAt=Date.now();saveHouseCupResults();toast('🔓 Results unlocked for correction.');render();
+  },
+  hcRosterEvent(v){state.houseCupRosterEventId=v;state.houseCupRosterDivision='K–2';render();},
+  hcRosterHouse(v){state.houseCupRosterHouseId=v;render();},
+  hcRosterDivision(v){state.houseCupRosterDivision=v;render();},
+  hcSaveRoster(form){
+    const fd=new FormData(form),eid=String(fd.get('eventId')||''),hid=String(fd.get('houseId')||''),div=String(fd.get('division')||'K–2');
+    if(!hcCanEditRosterHouse(hid))return;
+    const cs=Math.max(1,parseInt(fd.get('competitorSlots'))||1),as=Math.max(0,parseInt(fd.get('alternateSlots'))||0),competitors=[],alternates=[];
+    for(let i=0;i<cs;i++){const v=fd.get('competitor_'+i);if(v)competitors.push(String(v))}
+    for(let i=0;i<as;i++){const v=fd.get('alternate_'+i);if(v)alternates.push(String(v))}
+    const all=[...competitors,...alternates].filter(Boolean);
+    if(new Set(all).size!==all.length){toast('⚠ A scholar cannot be listed twice on the same roster.');return}
+    if(competitors.length<cs){toast('⚠ Fill every competitor slot before saving.');return}
+    const obj={eventId:eid,houseId:hid,division:div,competitors,alternates,notes:String(fd.get('notes')||''),updatedAt:Date.now(),competitorSlots:cs,alternateSlots:as};
+    const at=HOUSE_CUP_ROSTERS.findIndex(r=>r.eventId===eid&&r.houseId===hid&&r.division===div);
+    if(at>=0)HOUSE_CUP_ROSTERS[at]=obj;else HOUSE_CUP_ROSTERS.push(obj);
+    saveHouseCupRosters();toast('✔ House Cup roster saved.');render();
+  },
+  hcOpenEvent(id){ if(!isAdmin()) return; state.houseCupEditingId=id||'__new__'; render(); },
+  hcCloseEvent(){ state.houseCupEditingId=null; render(); },
+  hcSaveEvent(form){
+    if(!isAdmin()) return;
+    const fd=new FormData(form), id=fd.get('id')||uid('HC');
+    const obj={id,date:String(fd.get('date')||''),name:String(fd.get('name')||'').trim(),type:String(fd.get('type')||'Custom'),divisions:String(fd.get('divisions')||''),competitors:String(fd.get('competitors')||''),maxPoints:Math.max(0,parseInt(fd.get('maxPoints'))||0),status:String(fd.get('status')||'Upcoming'),major:fd.get('major')==='on',mystery:fd.get('mystery')==='on',notes:String(fd.get('notes')||'')};
+    const at=HOUSE_CUP_EVENTS.findIndex(x=>x.id===id); if(at>=0) HOUSE_CUP_EVENTS[at]=obj; else HOUSE_CUP_EVENTS.push(obj);
+    saveHouseCupEvents(); state.houseCupEditingId=null; toast('✔ House Cup event saved.'); render();
+  },
+  hcDeleteEvent(id){
+    if(!isAdmin()) return;
+    if(!confirm('Delete this House Cup event? Its saved rosters and results will also be removed.')) return;
+    HOUSE_CUP_EVENTS=HOUSE_CUP_EVENTS.filter(x=>x.id!==id);
+    HOUSE_CUP_ROSTERS=HOUSE_CUP_ROSTERS.filter(x=>x.eventId!==id);
+    HOUSE_CUP_RESULTS=HOUSE_CUP_RESULTS.filter(x=>x.eventId!==id);
+    saveHouseCupEvents(); saveHouseCupRosters(); saveHouseCupResults();
+    state.houseCupEditingId=null;
+    toast('Event, rosters, and results deleted.');
+    render();
+  },
+  hcDuplicateEvent(id){ if(!isAdmin()) return; const e=HOUSE_CUP_EVENTS.find(x=>x.id===id); if(!e) return; HOUSE_CUP_EVENTS.push({...e,id:uid('HC'),name:e.name+' (Copy)',status:'Upcoming'}); saveHouseCupEvents(); toast('✔ Event copied.'); render(); },
   setScanInput(v){ state.scanInput=v; },
   setSearchQuery(v){ state.searchQuery=v; render();
     setTimeout(()=>{ const el=document.getElementById('searchQueryInput'); if(el){ el.focus(); el.selectionStart=el.selectionEnd=el.value.length; } },0); },
