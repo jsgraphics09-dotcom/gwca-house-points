@@ -9,7 +9,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
@@ -39,19 +38,22 @@
   nav.mobile-nav button.active{color:var(--orange-dark);font-weight:700;}
   nav.mobile-nav .ic{font-size:19px;}
 
-  main{flex:1;padding:16px;max-width:960px;width:100%;margin:0 auto;}
-
   @media(min-width:880px){
     nav.mobile-nav{display:none;}
-    nav.desktop-nav{display:flex;flex-direction:column;position:fixed;top:66px;left:0;bottom:0;width:200px;background:var(--navy);padding:16px 12px;gap:3px;z-index:15;overflow-y:auto;}
-    nav.desktop-nav button{background:none;border:none;color:#CFE0F5;text-align:left;padding:11px 12px;border-radius:9px;font-family:inherit;font-size:13.5px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:10px;}
+    nav.desktop-nav{display:flex;flex-direction:column;position:fixed;top:66px;left:0;bottom:0;width:200px;max-height:calc(100vh - 66px);background:var(--navy);padding:12px 10px 18px;gap:2px;z-index:15;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.28) transparent;}
+    nav.desktop-nav::-webkit-scrollbar{width:7px;}
+    nav.desktop-nav::-webkit-scrollbar-thumb{background:rgba(255,255,255,.28);border-radius:8px;}
+    nav.desktop-nav .nav-role{color:#8FA6C3;font-size:9px;text-transform:uppercase;letter-spacing:.1em;font-weight:800;padding:2px 12px 8px;flex-shrink:0;}
+    nav.desktop-nav button{background:none;border:none;color:#CFE0F5;text-align:left;padding:9px 11px;border-radius:9px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:9px;flex-shrink:0;min-height:38px;width:100%;}
     nav.desktop-nav button.active{background:rgba(255,255,255,.14);color:#fff;}
     nav.desktop-nav .ic{font-size:16px;width:20px;text-align:center;}
     #app{padding-bottom:0;}
     main{margin-left:200px;max-width:1000px;}
   }
 
-  .card{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:14px;overflow-x:auto;}
+  main{flex:1;padding:16px;max-width:960px;width:100%;margin:0 auto;}
+
+  .card{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:14px;}
   .card h2{margin:0 0 10px;font-size:17px;color:var(--navy);}
   .grid{display:grid;gap:12px;}
   .grid-2{grid-template-columns:repeat(2,1fr);}
@@ -87,7 +89,7 @@
   .bar-track{flex:1;height:14px;background:#EEF1F6;border-radius:8px;overflow:hidden;}
   .bar-fill{height:100%;border-radius:8px;}
 
-  table{width:100%;min-width:480px;border-collapse:collapse;font-size:13px;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
   th{text-align:left;color:var(--muted);text-transform:uppercase;font-size:10px;letter-spacing:.06em;padding:8px 6px;border-bottom:2px solid var(--line);}
   td{padding:9px 6px;border-bottom:1px solid var(--line);}
   .pill-pos{color:var(--green);font-weight:700;}
@@ -98,7 +100,7 @@
   .chip.selected{border-color:var(--orange);background:#FFF1E8;color:var(--orange-dark);}
   .chip-cat{border:1.5px solid var(--line);background:#fff;border-radius:10px;padding:9px 12px;cursor:pointer;text-align:left;font-family:inherit;font-size:13px;}
   .chip-cat.selected{border-color:var(--navy);background:#EEF2F8;}
-  .toast{position:fixed;top:76px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 20px;border-radius:10px;z-index:300;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:90vw;text-align:center;}
+  .toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 20px;border-radius:10px;z-index:100;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.25);}
   .empty{color:var(--muted);font-size:13px;text-align:center;padding:24px 8px;}
   .badge-dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:5px;}
   .subtle{color:var(--muted);font-size:12px;}
@@ -112,9 +114,6 @@
   .modal-box{background:#fff;border-radius:16px;max-width:520px;width:100%;margin-top:36px;position:relative;box-shadow:0 20px 50px rgba(0,0,0,.35);}
   .modal-close{position:absolute;top:10px;right:10px;background:#EEF1F6;border:none;border-radius:50%;width:34px;height:34px;font-size:16px;cursor:pointer;z-index:2;}
   .modal-inner{padding:20px;}
-  @media print {
-    .no-print { display: none !important; }
-  }
 </style>
 </head>
 <body>
@@ -134,18 +133,10 @@ const firebaseConfig = {
   appId: "1:748462469091:web:04ae1560d5a9c856dfbad6"
 };
 const FIREBASE_ENABLED = !!(firebaseConfig.apiKey && firebaseConfig.apiKey.indexOf('PASTE') === -1);
-// Add ?display=1 to this file's URL to open a read-only, auto-cycling scoreboard for a hallway TV
-// or lobby screen — no staff login, no editing controls, just standings that update live.
-const PUBLIC_DISPLAY_MODE = (function(){
-  try { return new URLSearchParams(window.location.search).get('display') === '1'; }
-  catch(e){ return false; }
-})();
 let db = null;
-let storage = null;
 if (FIREBASE_ENABLED) {
   firebase.initializeApp(firebaseConfig);
   db = firebase.firestore();
-  storage = firebase.storage();
 }
 
 /* ============================= DATA ============================= */
@@ -161,11 +152,8 @@ const HOUSES = [
 
 const UNSORTED_HOUSE = {id:'unsorted', name:'Not Yet Sorted', color:'#8A94A6', mascot:'🎓', value:'—'};
 const houseById = id => HOUSES.find(h=>h.id===id) || UNSORTED_HOUSE;
-function distinctHomerooms(){
-  return Array.from(new Set(SCHOLARS.map(s=>s.homeroom).filter(Boolean))).sort();
-}
 
-let POS_CATEGORIES = [
+const POS_CATEGORIES = [
   ['Service',1],['Perseverance',1],['Integrity',1],['Compassion',1],['Equity',1],
   ['Academic Excellence',3],['Academic Improvement',2],['Perfect Attendance',2],
   ['On-Time Arrival',1],['Helping a Teacher',1],['Helping Another Scholar',1],
@@ -173,15 +161,15 @@ let POS_CATEGORIES = [
   ['Homework Completion',1],['Classroom Participation',1],['Positive Behavior',1],
   ['Community Service',2],['House Rally Participation',2],['Competition Participation',2],
   ['Teacher Recognition',3],['Principal Recognition',5]
-].map(([name,pts])=>({id:uid('CAT'),name,pts,dir:'positive',noteRequired:false}));
+].map(([name,pts])=>({name,pts,dir:'positive',noteRequired:false}));
 
-let NEG_CATEGORIES = [
+const NEG_CATEGORIES = [
   ['Disrespect',-2],['Disruptive Behavior',-1],['Uniform Violation',-1],['Tardiness',-1],
   ['Incomplete Work',-1],['Poor Sportsmanship',-2],['House Rule Violation',-1],
   ['Property Misuse',-2],['Other',-1]
-].map(([name,pts])=>({id:uid('CAT'),name,pts,dir:'negative',noteRequired:true}));
+].map(([name,pts])=>({name,pts,dir:'negative',noteRequired:true}));
 
-let REWARDS = [
+const REWARDS = [
   {name:'Free Dress Day', cost:15, cat:'Privilege'},
   {name:'Homework Pass', cost:10, cat:'Academic'},
   {name:'School Store Credit', cost:20, cat:'Shop'},
@@ -193,7 +181,7 @@ let REWARDS = [
   {name:'Game Room Time', cost:10, cat:'Privilege'},
   {name:'House T-Shirt', cost:30, cat:'Spirit'},
   {name:'Gift Card', cost:50, cat:'Shop'},
-].map(r=>({id:uid('RWD'), ...r}));
+];
 
 const FIRST=['Amara','Jayden','Zola','Marcus','Nia','Elijah','Simone','Kofi','Layla','Isaiah','Aaliyah','Malik','Destiny','Xavier','Imani','Noah','Camille','Terrence','Sadie','Julian'];
 const LAST=['Carter','Brooks','Washington','Freeman','Bailey','Coleman','Reed','Sanders','Fields','Boyd','Grant','Marsh','Pierce','Douglas','Hendrix','Okafor','Nunez','Patel','Kim','Diallo'];
@@ -207,16 +195,6 @@ function buildSeedScholars(){
 let SCHOLARS = FIREBASE_ENABLED ? [] : buildSeedScholars();
 let TRANSACTIONS=[]; // {id,scholarId,houseId,amount,dir,category,staffRole,note,ts}
 let REDEMPTIONS=[];
-let EVENT_AWARDS=[]; // {id,houseId,competitionName,points,note,staffRole,ts} — bonus points awarded to a whole house at a competition/rally, not tied to any one scholar
-let STAFF_LIST=[]; // {id (=Firebase Auth uid), name, email, role, canSubtract} — every staff account, admin-visible in Manage
-let YEAR_ARCHIVES=[]; // {id, label, archivedAt, houseTotals, champion, scholars:[{id,name,houseId,lifetimePoints,badges}], scholarCount, badgeEarnerCount}
-let AUDIT_LOG=[]; // {id, ts, staffName, staffRole, action, details} — one entry per admin change to categories, rewards, house settings, staff, etc.
-let BADGE_SEEN={}; // scholarId -> how many badges they had last time we checked, for detecting newly-earned ones
-let LAST_HOUSE_LEADER=null; // houseId currently in 1st place, for detecting lead changes
-let notificationsPrimed=false; // false until the first data load has silently seeded the two trackers above
-let HOUSE_CUP_TERMS=[]; // {id,name,from,to} — optional date-range periods (e.g. "Term 1") for viewing House Cup standings by period instead of all-time
-let TRADITIONS=[]; // {id,name,date,note} — informational calendar of recurring school events; doesn't affect scoring
-let CUP_CHAMPION=null; // {houseId,houseName,points,declaredAt} or null — this year's declared House Cup winner
 let SYNC_READY = !FIREBASE_ENABLED;
 
 /* ============================= STATE ============================= */
@@ -243,53 +221,12 @@ const state = {
   authError:null,          // error message to show on the login screen
   loginEmail:'',
   loginPassword:'',
-  photoImport:null, // {total, done, matched, unmatched:[]} while a bulk photo import is running
-  editingItem:null, // {type:'pos'|'neg'|'reward', id} while a category/reward name is being edited inline
-  reportFrom:null, // yyyy-mm-dd string, optional start date filter for the Transaction History report
-  reportTo:null,   // yyyy-mm-dd string, optional end date filter for the Transaction History report
-  liveEventMode:false, // true while the full-screen projector view is showing
-  liveEventName:'',    // event name typed into Live Event Mode, attached to quick-award buttons
-  selectedTermId:'all', // 'all' (all-time) or a HOUSE_CUP_TERMS id, controls the House Cup standings view
-  publicDisplaySlide:0, // which slide the public hallway-TV display is currently showing (only used when PUBLIC_DISPLAY_MODE is on)
-  printMode:false, // true while showing the printable reference-sheet preview
-  printSections:{pos:true, neg:true, rewards:true}, // which sections were checked when Preview & Print was clicked
-  yearResetPreview:null, // set to a snapshot object while the "New School Year" confirmation panel is showing
-  demoHomeroom:null, // local-demo-mode only: which homeroom "My Class" previews, since there's no real teacher login to bind to
-  pendingImport:null, // {scholars, missingBarcode, unsorted, previousCount} while the roster-import confirmation panel is showing
-  externalImport:null, // {stage:'mapping'|'preview', headers, rows, mapping, matched, unmatched} while a ClassDojo/external CSV import is in progress
 };
 
 function uid(p){return p+Math.random().toString(36).slice(2,9);}
 function fullName(s,short){ return short ? s.first+' '+s.last[0]+'.' : s.first+' '+s.last; }
 function scholarInitials(s){return (s.first[0]+s.last[0]).toUpperCase();}
-function scholarAvatar(s, size){
-  const h = houseById(s.houseId);
-  if(s.photoUrl){
-    return `<img src="${s.photoUrl}" class="avatar" style="width:${size}px;height:${size}px;min-width:${size}px;font-size:0;object-fit:cover;border:2px solid ${h.color};" alt="${fullName(s)}">`;
-  }
-  return `<div class="avatar" style="width:${size}px;height:${size}px;min-width:${size}px;font-size:${Math.max(11,Math.round(size*0.34))}px;background:${h.color}">${scholarInitials(s)}</div>`;
-}
-// Toasts queue instead of overwriting each other — this matters once notifications exist,
-// since e.g. awarding event points and a house taking the lead can genuinely happen in the same
-// instant, and both messages deserve to actually be seen rather than the second silently
-// replacing the first before anyone reads it.
-let toastQueue=[];
-let toastShowing=false;
-function toast(msg){
-  toastQueue.push(msg);
-  if(!toastShowing) showNextToast();
-}
-function showNextToast(){
-  if(toastQueue.length===0){ toastShowing=false; return; }
-  toastShowing=true;
-  state.toast=toastQueue.shift();
-  render();
-  setTimeout(()=>{
-    state.toast=null;
-    render();
-    setTimeout(showNextToast, 250);
-  }, 2200);
-}
+function toast(msg){ state.toast=msg; render(); setTimeout(()=>{state.toast=null; render();},2200); }
 
 function canSubtract(){
   if(state.role==='admin' || state.role==='house_admin') return true;
@@ -360,76 +297,9 @@ function importRowsToScholars(rows){
 
 function houseTotals(){
   const totals={}; HOUSES.forEach(h=>totals[h.id]=0);
-  // House/team totals count lifetimePoints, not currentPoints, on purpose:
-  // lifetimePoints only ever goes up (see applyTransaction below), so a student's
-  // personal deduction or a reward redemption reduces THEIR balance but never
-  // pulls the house's total back down. currentPoints is the "spendable now" number.
-  SCHOLARS.forEach(s=>{ if(totals[s.houseId]!==undefined) totals[s.houseId]+=s.lifetimePoints; }); // skip "Not Yet Sorted" scholars (houseId is null until they're placed)
-  // Plus any bonus points awarded directly to a house at a competition/rally (not tied to a scholar).
-  EVENT_AWARDS.forEach(e=>{ if(totals[e.houseId]!==undefined) totals[e.houseId]+=e.points; });
+  SCHOLARS.forEach(s=> totals[s.houseId]+=s.currentPoints);
   return totals;
 }
-// House Cup standings for a specific date range (e.g. "Term 1"), instead of all-time.
-// Unlike houseTotals() — which reads the authoritative scholar.lifetimePoints — this sums
-// timestamped transactions and event awards within the range, since lifetimePoints itself
-// isn't broken down by period. Only positive contributions count, same "never decreases"
-// philosophy as houseTotals().
-function houseTotalsForRange(fromStr, toStr){
-  const from = fromStr ? new Date(fromStr+'T00:00:00').getTime() : null;
-  const to = toStr ? new Date(toStr+'T23:59:59').getTime() : null;
-  const totals = {}; HOUSES.forEach(h=>totals[h.id]=0);
-  TRANSACTIONS.forEach(t=>{
-    if(t.amount<=0) return;
-    if(from!==null && t.ts<from) return;
-    if(to!==null && t.ts>to) return;
-    if(totals[t.houseId]!==undefined) totals[t.houseId]+=t.amount;
-  });
-  EVENT_AWARDS.forEach(e=>{
-    if(e.points<=0) return;
-    if(from!==null && e.ts<from) return;
-    if(to!==null && e.ts>to) return;
-    if(totals[e.houseId]!==undefined) totals[e.houseId]+=e.points;
-  });
-  return totals;
-}
-function getSelectedTermTotals(){
-  if(!state.selectedTermId || state.selectedTermId==='all') return houseTotals();
-  const term = HOUSE_CUP_TERMS.find(t=>t.id===state.selectedTermId);
-  if(!term) return houseTotals();
-  return houseTotalsForRange(term.from, term.to);
-}
-
-/* ============================= NOTIFICATIONS ============================= */
-// Detects two kinds of "just happened" events by comparing current state against what was
-// recorded last time this ran, and toasts whichever changed. Called after anything that could
-// move a scholar's Lifetime Points or a house's total (see call sites: applyTransaction,
-// awardEventPoints, and the scholars/eventAwards Firestore listeners).
-//
-// The very first call ever just silently records a baseline (so opening the app doesn't spam a
-// toast for every badge the whole school already has, or announce a "new" leader who's actually
-// been leading all year) — every call after that compares and toasts real changes only.
-function checkForNotifications(){
-  SCHOLARS.forEach(s=>{
-    const currentCount = badgesFor(s).length;
-    const seenCount = BADGE_SEEN[s.id] || 0;
-    if(notificationsPrimed && currentCount > seenCount){
-      const newestTier = BADGE_TIERS.slice().reverse().find(t=> s.lifetimePoints>=t.threshold);
-      if(newestTier) toast('🎉 '+fullName(s)+' just earned the '+newestTier.icon+' '+newestTier.label+' badge!');
-    }
-    BADGE_SEEN[s.id] = currentCount;
-  });
-
-  const totals = houseTotals();
-  const leader = HOUSES.slice().sort((a,b)=>totals[b.id]-totals[a.id])[0];
-  const newLeaderId = leader ? leader.id : null;
-  if(notificationsPrimed && LAST_HOUSE_LEADER && newLeaderId && newLeaderId!==LAST_HOUSE_LEADER){
-    toast('🏆 '+leader.name+' just took the lead in the House Cup!');
-  }
-  LAST_HOUSE_LEADER = newLeaderId;
-
-  notificationsPrimed = true;
-}
-
 function todayStats(){
   const today=new Date().toDateString();
   let added=0, deducted=0;
@@ -437,24 +307,6 @@ function todayStats(){
     if(t.dir==='positive') added+=t.amount; else deducted+=Math.abs(t.amount);
   });
   return {added,deducted};
-}
-
-/* ============================= REPORTS (Excel export via SheetJS) ============================= */
-function todayStamp(){ return new Date().toISOString().slice(0,10); } // e.g. "2026-08-05"
-function filterTransactionsByReportRange(txs){
-  const from = state.reportFrom ? new Date(state.reportFrom+'T00:00:00').getTime() : null;
-  const to = state.reportTo ? new Date(state.reportTo+'T23:59:59').getTime() : null;
-  return txs.filter(t => (from===null || t.ts>=from) && (to===null || t.ts<=to));
-}
-// Builds a one-sheet .xlsx from an array of plain objects and triggers a browser download.
-// Each object's keys become column headers — SheetJS handles the file format and the download itself.
-function downloadXLSX(rows, sheetName, filename){
-  if(!rows.length){ toast('⚠ Nothing to export for this report yet.'); return; }
-  const ws = XLSX.utils.json_to_sheet(rows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, sheetName);
-  XLSX.writeFile(wb, filename);
-  toast('✔ Downloaded '+filename);
 }
 function applyTransaction(scholar, categoryObj, amount, note){
   const dir = amount>=0 ? 'positive':'negative';
@@ -475,192 +327,12 @@ function applyTransaction(scholar, categoryObj, amount, note){
     scholar.currentPoints=newCurrent; scholar.lifetimePoints=newLifetime; scholar.rewardBalance=newReward; scholar.lastScan=tx.ts;
     TRANSACTIONS.unshift(tx);
   }
-  checkForNotifications();
   return tx;
 }
-const BADGE_TIERS = [
-  {threshold:50,  label:'50 Point Club',  icon:'🥉'},
-  {threshold:75,  label:'75 Point Club',  icon:'🥈'},
-  {threshold:100, label:'100 Point Club', icon:'🥇'},
-  {threshold:250, label:'250 Point Club', icon:'🏆'},
-  {threshold:500, label:'500 Point Club', icon:'💎'},
-];
 function badgesFor(s){
-  return BADGE_TIERS.filter(t=>s.lifetimePoints>=t.threshold).map(t=>t.label);
-}
-
-/* ============================= PHOTOS ============================= */
-// Resizes an uploaded image down to a small square-ish JPEG before it's stored, so 460 scholar
-// photos don't turn into a multi-hundred-megabyte roster. Runs entirely in the browser (canvas),
-// no server needed.
-function resizeImageToBlob(file, maxDim, quality){
-  return new Promise((resolve, reject)=>{
-    const reader = new FileReader();
-    reader.onload = (e)=>{
-      const img = new Image();
-      img.onload = ()=>{
-        let w=img.width, h=img.height;
-        if(w>h){ if(w>maxDim){ h=Math.round(h*maxDim/w); w=maxDim; } }
-        else { if(h>maxDim){ w=Math.round(w*maxDim/h); h=maxDim; } }
-        const canvas = document.createElement('canvas');
-        canvas.width=w; canvas.height=h;
-        canvas.getContext('2d').drawImage(img,0,0,w,h);
-        canvas.toBlob(blob=> blob ? resolve(blob) : reject(new Error('Could not process image')), 'image/jpeg', quality);
-      };
-      img.onerror = ()=>reject(new Error('Not a readable image file'));
-      img.src = e.target.result;
-    };
-    reader.onerror = ()=>reject(new Error('Could not read the file'));
-    reader.readAsDataURL(file);
-  });
-}
-// Matches an uploaded filename (e.g. "3825.jpg" or "S3825.png") to a scholar by barcode ID,
-// student ID, or internal record ID — whichever the filename's base name equals, ignoring case.
-function matchScholarByPhotoFilename(filename){
-  const base = filename.replace(/\.[^.]+$/,'').trim().toLowerCase();
-  if(!base) return null;
-  return SCHOLARS.find(s=>
-    (s.barcodeId && s.barcodeId.toLowerCase()===base) ||
-    (s.studentId && s.studentId.toLowerCase()===base) ||
-    (s.id && s.id.toLowerCase()===base)
-  ) || null;
-}
-/* ============================= EXTERNAL POINT IMPORT (e.g. ClassDojo) ============================= */
-// ClassDojo has no API for any third party — the only way data comes out is a CSV/spreadsheet
-// export a human downloads. Since we don't have a confirmed sample of that export's exact
-// column layout, this matches scholars by NAME (normalized, punctuation/extra-space tolerant)
-// rather than ID, and lets the admin map whichever columns the actual file turns out to have —
-// so it isn't locked to one specific format and should keep working even if that format changes.
-function normalizeNameForMatch(name){
-  return (name||'').toString().toLowerCase().replace(/[^a-z\s]/g,'').replace(/\s+/g,' ').trim();
-}
-function matchScholarByName(rawName){
-  const target = normalizeNameForMatch(rawName);
-  if(!target) return null;
-  // exact "first last" match first
-  let hit = SCHOLARS.find(s=> normalizeNameForMatch(s.first+' '+s.last)===target);
-  if(hit) return hit;
-  // fall back to "last first" order, in case the export writes names that way
-  hit = SCHOLARS.find(s=> normalizeNameForMatch(s.last+' '+s.first)===target);
-  if(hit) return hit;
-  return null;
-}
-// Turns parsed CSV rows into a matched/unmatched preview, given a column mapping the admin
-// confirmed (or the auto-guessed defaults). Doesn't touch any data yet — see confirmExternalPointImport.
-function buildExternalImportPreview(rows, mapping){
-  const matched = [];
-  const unmatched = [];
-  rows.forEach(row=>{
-    const rawName = (row[mapping.nameCol] ?? '').toString().trim();
-    const pointsRaw = row[mapping.pointsCol];
-    const points = typeof pointsRaw==='number' ? pointsRaw : parseFloat(pointsRaw);
-    if(!rawName || isNaN(points) || points===0) return; // skip blank/invalid rows silently
-    const category = (mapping.categoryCol && row[mapping.categoryCol]) ? String(row[mapping.categoryCol]).trim() : 'ClassDojo Import';
-    const scholar = matchScholarByName(rawName);
-    if(scholar) matched.push({scholar, points, category, rawName});
-    else unmatched.push({rawName, points, category});
-  });
-  return {matched, unmatched};
-}
-// Saves one scholar's photo. With Firebase configured, the resized image goes to Firebase
-// Storage (a separate file-storage service from Firestore — cheaper and faster for images)
-// and only the small download URL is written to the scholar's Firestore record. In local demo
-// mode there's no persistent storage, so the photo is kept only for this browser tab/session.
-async function setScholarPhoto(scholar, blob){
-  if(FIREBASE_ENABLED && storage){
-    const ref = storage.ref('photos/'+scholar.id+'.jpg');
-    await ref.put(blob, {contentType:'image/jpeg'});
-    const url = await ref.getDownloadURL();
-    await db.collection('scholars').doc(scholar.id).update({photoUrl:url});
-    scholar.photoUrl = url;
-  } else {
-    if(scholar.photoUrl && scholar.photoUrl.indexOf('blob:')===0) URL.revokeObjectURL(scholar.photoUrl);
-    scholar.photoUrl = URL.createObjectURL(blob);
-  }
-}
-
-/* ============================= POINT CATEGORIES & REWARDS (admin-editable) ============================= */
-// Both lists are plain arrays mutated in place / reassigned by the App actions above.
-// When Firebase is on, every change is written to a small 'settings' doc so all staff devices
-// stay in sync; in local demo mode changes just live in this browser tab.
-function persistCategories(){
-  if(!FIREBASE_ENABLED) return;
-  db.collection('settings').doc('pointCategories').set({positive: POS_CATEGORIES, negative: NEG_CATEGORIES})
-    .catch(err=> toast('⚠ Sync error: '+err.message));
-}
-function persistRewards(){
-  if(!FIREBASE_ENABLED) return;
-  db.collection('settings').doc('rewardsCatalog').set({items: REWARDS})
-    .catch(err=> toast('⚠ Sync error: '+err.message));
-}
-function persistCupTerms(){
-  if(!FIREBASE_ENABLED) return;
-  db.collection('settings').doc('houseCupTerms').set({items: HOUSE_CUP_TERMS})
-    .catch(err=> toast('⚠ Sync error: '+err.message));
-}
-function persistTraditions(){
-  if(!FIREBASE_ENABLED) return;
-  db.collection('settings').doc('traditions').set({items: TRADITIONS})
-    .catch(err=> toast('⚠ Sync error: '+err.message));
-}
-function persistChampion(){
-  if(!FIREBASE_ENABLED) return;
-  db.collection('settings').doc('cupChampion').set({champion: CUP_CHAMPION})
-    .catch(err=> toast('⚠ Sync error: '+err.message));
-}
-
-/* ============================= NEW SCHOOL YEAR RESET ============================= */
-// Firestore batches cap out at 500 operations. This chunks a large list into safely-sized
-// batches so the reset keeps working even if the roster someday grows past that (currently 460
-// scholars, comfortably under one batch, but no reason to leave a landmine for later).
-function commitInChunks(items, chunkSize, applyToBatch){
-  const chunks = [];
-  for(let i=0;i<items.length;i+=chunkSize) chunks.push(items.slice(i,i+chunkSize));
-  return Promise.all(chunks.map(chunk=>{
-    const batch = db.batch();
-    chunk.forEach(item=> applyToBatch(batch,item));
-    return batch.commit();
-  }));
-}
-// Captures everything worth remembering about the year that's ending, before any of it gets
-// wiped. Lifetime Points and badges only exist as live, computed numbers — once scholars are
-// reset to 0, there'd be no way to answer "who won 2025–2026?" without this snapshot.
-function buildYearArchiveSnapshot(label){
-  const totals = houseTotals();
-  const scholarsSnapshot = SCHOLARS.filter(s=>s.status==='active').map(s=>({
-    id:s.id, name:fullName(s), houseId:s.houseId, lifetimePoints:s.lifetimePoints, badges:badgesFor(s)
-  }));
-  return {
-    id: uid('ARCHIVE'),
-    label,
-    archivedAt: Date.now(),
-    houseTotals: totals,
-    champion: CUP_CHAMPION,
-    scholarCount: scholarsSnapshot.length,
-    badgeEarnerCount: scholarsSnapshot.filter(s=>s.badges.length>0).length,
-    scholars: scholarsSnapshot,
-  };
-}
-
-/* ============================= AUDIT LOG ============================= */
-// One entry per admin change to a setting — categories, rewards, house crests, staff accounts,
-// terms, traditions, the champion, roster imports, and year resets. Deliberately NOT used for
-// everyday point awards/deductions — those already have their own full record in Transaction
-// History, and duplicating every single point award here would bury the settings changes this
-// is actually for under thousands of routine entries.
-function logAudit(action, details){
-  const entry = {
-    id: uid('AUD'),
-    ts: Date.now(),
-    staffName: (state.staffProfile && state.staffProfile.name) || (state.authUser && state.authUser.email) || (ROLE_LABELS[state.role] || state.role || 'Unknown'),
-    staffRole: state.role,
-    action,
-    details: details || '',
-  };
-  if(FIREBASE_ENABLED){
-    db.collection('auditLog').doc(entry.id).set(entry).catch(err=> toast('⚠ Sync error: '+err.message));
-  }
-  AUDIT_LOG.unshift(entry);
+  const b=[];
+  [25,50,100,250,500].forEach(t=>{ if(s.lifetimePoints>=t) b.push(t+' Point Club'); });
+  return b;
 }
 
 /* ============================= RENDER HELPERS ============================= */
@@ -680,187 +352,16 @@ function renderLoginScreen(){
       ` : `
         <form onsubmit="App.login(); return false;">
           <label class="subtle" style="display:block;margin-bottom:4px;">Email</label>
-          <input type="email" autocomplete="username" id="loginEmailInput" value="${(state.loginEmail||'').replace(/"/g,'&quot;')}"
+          <input type="email" autocomplete="username" value="${(state.loginEmail||'').replace(/"/g,'&quot;')}"
             oninput="App.setLoginEmail(this.value)" style="width:100%;padding:10px;border:1.5px solid var(--line);border-radius:8px;margin-bottom:12px;" required />
           <label class="subtle" style="display:block;margin-bottom:4px;">Password</label>
-          <input type="password" autocomplete="current-password" id="loginPasswordInput" value="${(state.loginPassword||'').replace(/"/g,'&quot;')}"
+          <input type="password" autocomplete="current-password" value="${(state.loginPassword||'').replace(/"/g,'&quot;')}"
             oninput="App.setLoginPassword(this.value)" style="width:100%;padding:10px;border:1.5px solid var(--line);border-radius:8px;margin-bottom:16px;" required />
           ${state.authError ? `<div style="color:var(--red,#C0392B);font-size:13px;margin-bottom:12px;">⚠ ${state.authError}</div>` : ''}
           <button type="submit" class="btn btn-navy btn-block" ${state.authBusy?'disabled':''}>${state.authBusy?'Signing in…':'Sign In'}</button>
         </form>
         <p class="subtle" style="margin-top:16px;font-size:12px;text-align:center;">Don't have an account? Ask your administrator to set one up in Firebase.</p>
       `}
-    </div>
-  </div>`;
-}
-
-// Read-only hallway/lobby TV display. Auto-cycles between a few slides every 12 seconds and
-// requires no staff login — see PUBLIC_DISPLAY_MODE and the sign-in bootstrap at the bottom of
-// this file for how it reads live data safely without a real staff account.
-const PUBLIC_DISPLAY_SLIDES = ['housecup','topscholars','badges','events'];
-function renderPublicDisplay(){
-  const slide = PUBLIC_DISPLAY_SLIDES[state.publicDisplaySlide % PUBLIC_DISPLAY_SLIDES.length];
-  let inner = '';
-
-  if(slide==='housecup'){
-    const totals = houseTotals();
-    const maxTotal = Math.max(1, ...HOUSES.map(h=>totals[h.id]));
-    const sorted = HOUSES.slice().sort((a,b)=>totals[b.id]-totals[a.id]);
-    inner = `
-      <h1 class="display" style="color:#fff;font-size:40px;margin:0 0 24px;">👑 House Cup Standings</h1>
-      <div style="display:grid;gap:18px;">
-        ${sorted.map((h,i)=>`
-          <div style="background:#fff;border-radius:16px;padding:20px 26px;display:flex;align-items:center;gap:20px;border-left:12px solid ${h.color};">
-            <div style="font-size:30px;width:44px;">${i===0?'👑':'#'+(i+1)}</div>
-            <div class="house-crest" style="background:${h.color};width:68px;height:68px;overflow:hidden;flex-shrink:0;">${houseIcon(h,60)}</div>
-            <div style="flex:1;">
-              <div style="font-weight:800;font-size:24px;color:var(--ink,#1B2A4A);">${h.name}</div>
-              <div class="bar-track" style="height:16px;margin-top:8px;"><div class="bar-fill" style="width:${(totals[h.id]/maxTotal*100)}%;background:${h.color};"></div></div>
-            </div>
-            <div style="font-size:44px;font-weight:800;color:${h.color};min-width:110px;text-align:right;">${totals[h.id]}</div>
-          </div>`).join('')}
-      </div>`;
-  } else if(slide==='topscholars'){
-    const top = SCHOLARS.filter(s=>s.status==='active').slice().sort((a,b)=>b.currentPoints-a.currentPoints).slice(0,10);
-    inner = `
-      <h1 class="display" style="color:#fff;font-size:40px;margin:0 0 24px;">🏆 Top Scholars</h1>
-      <div style="display:grid;gap:10px;">
-        ${top.map((s,i)=>`
-          <div style="background:#fff;border-radius:12px;padding:14px 20px;display:flex;align-items:center;gap:16px;">
-            <div style="font-size:20px;font-weight:800;color:var(--navy,#1B2A4A);width:32px;">${i+1}</div>
-            ${scholarAvatar(s,44)}
-            <div style="flex:1;font-weight:700;font-size:18px;">${fullName(s,true)}</div>
-            ${houseChip(houseById(s.houseId))}
-            <div style="font-size:22px;font-weight:800;color:${houseById(s.houseId).color};min-width:60px;text-align:right;">${s.currentPoints}</div>
-          </div>`).join('')}
-      </div>`;
-  } else if(slide==='badges'){
-    const tiers = BADGE_TIERS.slice().reverse();
-    const spotlight = tiers.find(t=> SCHOLARS.some(s=>s.status==='active' && s.lifetimePoints>=t.threshold)) || tiers[tiers.length-1];
-    const earners = SCHOLARS.filter(s=>s.status==='active' && s.lifetimePoints>=spotlight.threshold).sort((a,b)=>b.lifetimePoints-a.lifetimePoints).slice(0,10);
-    inner = `
-      <h1 class="display" style="color:#fff;font-size:40px;margin:0 0 8px;">${spotlight.icon} ${spotlight.label}</h1>
-      <p style="color:#cbd5e1;margin:0 0 24px;font-size:16px;">Scholars who've reached this milestone</p>
-      ${earners.length ? `<div style="display:grid;gap:10px;">
-        ${earners.map(s=>`
-          <div style="background:#fff;border-radius:12px;padding:14px 20px;display:flex;align-items:center;gap:16px;">
-            ${scholarAvatar(s,44)}
-            <div style="flex:1;font-weight:700;font-size:18px;">${fullName(s,true)}</div>
-            ${houseChip(houseById(s.houseId))}
-            <div style="font-size:18px;font-weight:800;color:var(--ink,#1B2A4A);">${s.lifetimePoints} pts</div>
-          </div>`).join('')}
-      </div>` : `<div style="color:#fff;font-size:18px;">No one has reached this milestone yet — could be you!</div>`}`;
-  } else if(slide==='events'){
-    const upcoming = TRADITIONS.filter(t=>t.date).slice().sort((a,b)=> a.date<b.date?-1:(a.date>b.date?1:0)).slice(0,8);
-    inner = `
-      <h1 class="display" style="color:#fff;font-size:40px;margin:0 0 24px;">📅 Upcoming Events</h1>
-      ${upcoming.length ? `<div style="display:grid;gap:10px;">
-        ${upcoming.map(t=>`
-          <div style="background:#fff;border-radius:12px;padding:16px 22px;display:flex;align-items:center;gap:20px;">
-            <div style="font-size:18px;font-weight:800;color:var(--orange,#E8722C);min-width:110px;">${t.date}</div>
-            <div style="flex:1;font-weight:700;font-size:18px;">${t.name}</div>
-            <div style="color:#666;font-size:14px;">${t.note||''}</div>
-          </div>`).join('')}
-      </div>` : `<div style="color:#fff;font-size:18px;">No upcoming events on the calendar yet.</div>`}`;
-  }
-
-  return `<div style="min-height:100vh;background:var(--navy,#1B2A4A);padding:40px;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-      <div style="display:flex;align-items:center;gap:12px;">
-        <div style="font-size:32px;">🦁</div>
-        <div style="color:#fff;font-weight:800;font-size:20px;">GWCA House Points</div>
-      </div>
-      <div style="display:flex;gap:6px;">
-        ${PUBLIC_DISPLAY_SLIDES.map((sId,i)=>`<div style="width:10px;height:10px;border-radius:50%;background:${i===state.publicDisplaySlide%PUBLIC_DISPLAY_SLIDES.length?'#fff':'rgba(255,255,255,.3)'};"></div>`).join('')}
-      </div>
-    </div>
-    ${inner}
-  </div>`;
-}
-
-// Full-screen projector view for assemblies/rallies. Reads the same live data as the rest of the
-// app, so it updates automatically as points come in — no separate refresh logic needed.
-// Clean, ink-friendly full-page preview of categories/rewards for printing or saving as a PDF.
-// Replaces the whole screen (like Live Event Mode) so the printed page contains only this
-// content, not the app's nav/topbar. The .no-print buttons hide themselves automatically when
-// the browser's print dialog is used, via the @media print rule in the stylesheet.
-function renderPrintPreview(){
-  const sec = state.printSections;
-  const today = new Date().toLocaleDateString([], {year:'numeric', month:'long', day:'numeric'});
-  return `
-  <div style="max-width:800px;margin:0 auto;padding:32px;background:#fff;color:#111;font-family:inherit;">
-    <div class="no-print" style="display:flex;gap:10px;margin-bottom:24px;">
-      <button class="btn btn-navy" onclick="window.print()">🖨️ Print / Save as PDF</button>
-      <button class="btn btn-outline" onclick="App.closePrintPreview()">← Back to App</button>
-    </div>
-    <div style="text-align:center;margin-bottom:28px;border-bottom:3px solid #111;padding-bottom:14px;">
-      <div style="font-size:28px;font-weight:800;">🦁 GWCA House Points</div>
-      <div style="font-size:14px;color:#444;margin-top:4px;">Reference Sheet — generated ${today}</div>
-    </div>
-
-    ${sec.pos ? `
-    <div style="margin-bottom:26px;page-break-inside:avoid;">
-      <h2 style="border-bottom:1.5px solid #111;padding-bottom:4px;margin-bottom:8px;">🟢 Good Behavior — Adds Points</h2>
-      <table style="width:100%;border-collapse:collapse;font-size:14px;">
-        <thead><tr><th style="text-align:left;padding:6px 4px;border-bottom:1px solid #999;">Category</th><th style="text-align:right;padding:6px 4px;border-bottom:1px solid #999;">Points</th></tr></thead>
-        <tbody>
-          ${POS_CATEGORIES.map(c=>`<tr><td style="padding:6px 4px;border-bottom:1px solid #ddd;">${c.name}</td><td style="text-align:right;padding:6px 4px;border-bottom:1px solid #ddd;">+${c.pts}</td></tr>`).join('')}
-        </tbody>
-      </table>
-    </div>` : ''}
-
-    ${sec.neg ? `
-    <div style="margin-bottom:26px;page-break-inside:avoid;">
-      <h2 style="border-bottom:1.5px solid #111;padding-bottom:4px;margin-bottom:8px;">🔴 Disciplinary — Subtracts Points</h2>
-      <table style="width:100%;border-collapse:collapse;font-size:14px;">
-        <thead><tr><th style="text-align:left;padding:6px 4px;border-bottom:1px solid #999;">Category</th><th style="text-align:right;padding:6px 4px;border-bottom:1px solid #999;">Points</th></tr></thead>
-        <tbody>
-          ${NEG_CATEGORIES.map(c=>`<tr><td style="padding:6px 4px;border-bottom:1px solid #ddd;">${c.name}</td><td style="text-align:right;padding:6px 4px;border-bottom:1px solid #ddd;">${c.pts}</td></tr>`).join('')}
-        </tbody>
-      </table>
-    </div>` : ''}
-
-    ${sec.rewards ? `
-    <div style="margin-bottom:10px;page-break-inside:avoid;">
-      <h2 style="border-bottom:1.5px solid #111;padding-bottom:4px;margin-bottom:8px;">🎁 Rewards Catalog</h2>
-      <table style="width:100%;border-collapse:collapse;font-size:14px;">
-        <thead><tr><th style="text-align:left;padding:6px 4px;border-bottom:1px solid #999;">Reward</th><th style="text-align:left;padding:6px 4px;border-bottom:1px solid #999;">Category</th><th style="text-align:right;padding:6px 4px;border-bottom:1px solid #999;">Cost</th></tr></thead>
-        <tbody>
-          ${REWARDS.map(r=>`<tr><td style="padding:6px 4px;border-bottom:1px solid #ddd;">${r.name}</td><td style="padding:6px 4px;border-bottom:1px solid #ddd;color:#555;">${r.cat}</td><td style="text-align:right;padding:6px 4px;border-bottom:1px solid #ddd;">${r.cost} pts</td></tr>`).join('')}
-        </tbody>
-      </table>
-    </div>` : ''}
-
-    ${(!sec.pos && !sec.neg && !sec.rewards) ? `<div class="empty">Nothing selected — go back and check at least one section.</div>` : ''}
-  </div>`;
-}
-
-function renderLiveEventMode(){
-  const totals = houseTotals();
-  const maxTotal = Math.max(1, ...HOUSES.map(h=>totals[h.id]));
-  const sorted = HOUSES.slice().sort((a,b)=>totals[b.id]-totals[a.id]);
-  const canAward = state.role==='admin' || state.role==='house_admin';
-  return `
-  <div style="min-height:100vh;background:var(--navy,#1B2A4A);padding:28px;color:#fff;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
-      <h1 class="display" style="color:#fff;margin:0;font-size:32px;">🏆 ${state.liveEventName ? state.liveEventName : 'House Cup Live'}</h1>
-      <button class="btn btn-outline" style="background:#fff;" onclick="App.exitLiveMode()">Exit Live Mode</button>
-    </div>
-    ${canAward ? `<input id="liveEventName" type="text" placeholder="Event name (e.g. Field Day) — shown above and saved with each award" value="${(state.liveEventName||'').replace(/"/g,'&quot;')}" oninput="App.setLiveEventName(this.value)" style="padding:10px;border-radius:8px;border:none;width:100%;max-width:420px;margin-bottom:20px;">` : ''}
-    <div style="display:grid;gap:16px;">
-      ${sorted.map((h,i)=>`
-        <div style="background:#fff;border-radius:16px;padding:18px 22px;display:flex;align-items:center;gap:18px;border-left:10px solid ${h.color};flex-wrap:wrap;">
-          <div style="font-size:26px;font-weight:800;color:${h.color};width:36px;">#${i+1}</div>
-          <div class="house-crest" style="background:${h.color};width:60px;height:60px;overflow:hidden;flex-shrink:0;">${houseIcon(h,52)}</div>
-          <div style="flex:1;min-width:180px;">
-            <div style="font-weight:800;font-size:20px;color:var(--ink,#1B2A4A);">${h.name}</div>
-            <div class="bar-track" style="height:14px;margin-top:6px;"><div class="bar-fill" style="width:${(totals[h.id]/maxTotal*100)}%;background:${h.color};"></div></div>
-          </div>
-          <div style="font-size:38px;font-weight:800;color:${h.color};min-width:90px;text-align:right;">${totals[h.id]}</div>
-          ${canAward ? `<div style="display:flex;gap:6px;">
-            ${[1,5,10,25].map(n=>`<button class="btn btn-primary" style="padding:10px 14px;font-size:14px;" onclick="App.awardEventPoints('${h.id}', ${n}, document.getElementById('liveEventName').value, '')">+${n}</button>`).join('')}
-          </div>` : ''}
-        </div>`).join('')}
     </div>
   </div>`;
 }
@@ -900,17 +401,13 @@ const ROLE_LABELS = {admin:'Administrator', house_admin:'House Admin', teacher:'
 
 const NAV_ITEMS = [
   {id:'dashboard', label:'Dashboard', ic:'🏠', roles:['admin','house_admin','teacher']},
+  {id:'housecup', label:'House Cup', ic:'🏆', roles:['admin','house_admin','teacher','student']},
   {id:'scan', label:'Scan', ic:'📷', roles:['admin','house_admin','teacher','student']},
-  {id:'myclass', label:'My Class', ic:'🏫', roles:['teacher']},
   {id:'search', label:'Search', ic:'🔎', roles:['admin','house_admin','teacher']},
   {id:'leaderboard', label:'Leaders', ic:'🏆', roles:['admin','house_admin','teacher','student']},
-  {id:'housecup', label:'House Cup', ic:'👑', roles:['admin','house_admin','teacher','student']},
   {id:'houses', label:'Houses', ic:'🛡️', roles:['admin','house_admin','teacher','student']},
-  {id:'badges', label:'Badges', ic:'🏅', roles:['admin','house_admin','teacher','student']},
   {id:'rewards', label:'Rewards', ic:'🎁', roles:['admin','house_admin','teacher','student']},
   {id:'history', label:'History', ic:'📜', roles:['admin','house_admin','teacher']},
-  {id:'reports', label:'Reports', ic:'📊', roles:['admin','house_admin']},
-  {id:'competitions', label:'Events', ic:'🎉', roles:['admin','house_admin']},
   {id:'rulebook', label:'Rulebook', ic:'📘', roles:['admin','house_admin','teacher','student']},
   {id:'manage', label:'Manage', ic:'⚙️', roles:['admin']},
 ];
@@ -932,6 +429,7 @@ function renderMobileNav(){
 function renderDesktopNav(){
   const items = NAV_ITEMS.filter(i=>i.roles.includes(state.role));
   return `<nav class="desktop-nav">
+    <div class="nav-role">Menu • ${ROLE_LABELS[state.role] || state.role}</div>
     ${items.map(i=>`
       <button class="${state.tab===i.id?'active':''}" onclick="App.setTab('${i.id}')">
         <span class="ic">${i.ic}</span>${i.label}
@@ -968,7 +466,7 @@ function scholarRow(s, onClick){
   const h=houseById(s.houseId);
   return `<div class="card" style="cursor:pointer;margin-bottom:10px;" onclick="${onClick}">
     <div class="scholar-card">
-      ${scholarAvatar(s,64)}
+      <div class="avatar" style="background:${h.color}">${scholarInitials(s)}</div>
       <div style="flex:1">
         <div style="font-weight:700;">${fullName(s)}</div>
         <div class="subtle">Grade ${s.grade} · ${s.homeroom||'—'} · ${s.studentId||'No ID yet'}</div>
@@ -1012,8 +510,8 @@ function viewDashboard(){
   <div class="grid grid-2">
     <div class="card">
       <h2>Top Scholars</h2>
-      ${topScholars.map((s,i)=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);cursor:pointer;" onclick="App.openScholarModal('${s.id}')">
-        <span style="display:flex;align-items:center;gap:8px;">${scholarAvatar(s,28)} ${i+1}. ${fullName(s)} <span class="subtle">(${houseById(s.houseId).name})</span></span>
+      ${topScholars.map((s,i)=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);cursor:pointer;" onclick="App.openScholarModal('${s.id}')">
+        <span>${i+1}. ${fullName(s)} <span class="subtle">(${houseById(s.houseId).name})</span></span>
         <strong>${s.currentPoints}</strong>
       </div>`).join('')}
     </div>
@@ -1026,6 +524,88 @@ function viewDashboard(){
           ${fullName(s)} — ${t.category}
         </div>`;
       }).join('') : '<div class="empty">No transactions yet — try Scan or Search.</div>'}
+    </div>
+  </div>
+  `;
+}
+
+function viewHouseCup(){
+  const totals = houseTotals();
+  const ranked = HOUSES.slice().sort((a,b)=>totals[b.id]-totals[a.id]);
+  const scoring = [
+    {label:'Individual', max:'30', detail:'10 / 8 / 6 / 4 / 2 per division'},
+    {label:'Group', max:'60', detail:'20 / 16 / 12 / 8 / 4 per division'},
+    {label:'Major House', max:'100', detail:'100 / 80 / 60 / 40 / 20'},
+    {label:"Lion's Last Roar", max:'100', detail:'Championship finale'}
+  ];
+
+  return `
+  <div class="card" style="background:linear-gradient(135deg,var(--navy),var(--navy-light));color:#fff;border:none;overflow:hidden;position:relative;">
+    <div style="position:absolute;right:-18px;top:-30px;font-size:120px;opacity:.08;">🏆</div>
+    <div style="position:relative;z-index:1;">
+      <div class="subtle" style="color:#F7C7A8;text-transform:uppercase;letter-spacing:.14em;font-weight:800;">2026–2027 Championship Season</div>
+      <h2 style="color:#fff;font-size:28px;margin:5px 0 6px;">GWCA House Cup</h2>
+      <div style="font-weight:800;font-size:15px;">ONE SCHOOL. FIVE HOUSES. ONE CUP.</div>
+      <div style="margin-top:10px;color:#D8E3F1;font-size:13px;">Regular season: September 2026 – May 28, 2027 &nbsp;•&nbsp; Championship Field Day: June 7, 2027</div>
+    </div>
+  </div>
+
+  <div class="grid grid-4" style="margin-bottom:14px;">
+    ${statCard('1,525','Regular Season Max')}
+    ${statCard('490','Field Day Max')}
+    ${statCard('2,015','Full Season Max')}
+    ${statCard('24%','Field Day Weight')}
+  </div>
+
+  <div class="card">
+    <h2>🏆 House Cup Scoring Architecture</h2>
+    <div class="grid grid-2">
+      ${scoring.map(s=>`
+        <div style="border:1px solid var(--line);border-radius:12px;padding:13px;">
+          <div style="font-size:12px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.07em;">${s.label}</div>
+          <div class="display" style="font-size:28px;color:var(--navy);margin:3px 0;">${s.max} <span style="font-family:Inter,sans-serif;font-size:11px;color:var(--muted);">MAX POINTS</span></div>
+          <div class="subtle">${s.detail}</div>
+        </div>`).join('')}
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🦁 House Cup Competition Standings</h2>
+    <div style="background:#FFF7F1;border:1px solid #F6D0B7;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px;line-height:1.5;">
+      <strong>Phase 1 installed:</strong> House Cup competition points are intentionally kept separate from scholar behavior/reward points. Competition scoring and Firebase result entry will be connected in the next phase.
+    </div>
+    <table>
+      <thead><tr><th>Rank</th><th>House</th><th>House Cup</th><th>Current House Points*</th></tr></thead>
+      <tbody>
+        ${ranked.map((h,i)=>`<tr>
+          <td><strong>${i+1}</strong></td>
+          <td><span class="badge-dot" style="background:${h.color}"></span><strong>${h.name}</strong></td>
+          <td><strong>0</strong></td>
+          <td>${totals[h.id]}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+    <div class="subtle" style="margin-top:9px;">*Current House Points are your existing scholar-based points. They have not been changed by this House Cup update.</div>
+  </div>
+
+  <div class="grid grid-2">
+    <div class="card">
+      <h2>📅 September Kickoff</h2>
+      <div style="padding:8px 0;border-bottom:1px solid var(--line);"><strong>Sept. 11</strong> — Cup Stack Showdown <span class="subtle">• Individual</span></div>
+      <div style="padding:8px 0;border-bottom:1px solid var(--line);"><strong>Sept. 18</strong> — Giant Puzzle Race <span class="subtle">• Group</span></div>
+      <div style="padding:8px 0;"><strong>Sept. 25</strong> — Free Throw Pressure <span class="subtle">• Individual</span></div>
+    </div>
+    <div class="card">
+      <h2>⚙️ House Cup Module</h2>
+      <div class="chip-row" style="margin-bottom:10px;">
+        <span class="chip selected" style="cursor:default;">✓ Overview</span>
+        <span class="chip" style="cursor:default;opacity:.65;">Schedule</span>
+        <span class="chip" style="cursor:default;opacity:.65;">Rosters</span>
+        <span class="chip" style="cursor:default;opacity:.65;">Results</span>
+        <span class="chip" style="cursor:default;opacity:.65;">Participation</span>
+        <span class="chip" style="cursor:default;opacity:.65;">Championship</span>
+      </div>
+      <div class="subtle">The Overview is active. The remaining House Cup tools will be added inside this same app—no second app required.</div>
     </div>
   </div>
   `;
@@ -1072,15 +652,11 @@ function renderScholarPanel(){
   return `
   <div class="card" style="border-top:5px solid ${h.color}">
     <div class="scholar-card" style="margin-bottom:10px;">
-      ${scholarAvatar(s,76)}
+      <div class="avatar" style="background:${h.color};width:76px;height:76px;font-size:26px;">${scholarInitials(s)}</div>
       <div style="flex:1">
         <h2 style="margin:0;">${fullName(s)}</h2>
         <div class="subtle">${s.studentId||'No student ID yet'} · Grade ${s.grade} · ${s.homeroom||'—'}</div>
         <div style="margin-top:6px;">${houseChip(h)}</div>
-        ${isAdmin() ? `
-        <input type="file" accept="image/*" id="changePhotoInput-${s.id}" style="display:none" onchange="App.changeScholarPhoto('${s.id}', this)">
-        <button class="btn btn-outline" style="padding:5px 10px;font-size:11px;margin-top:6px;" onclick="document.getElementById('changePhotoInput-${s.id}').click()">📷 ${s.photoUrl?'Change':'Add'} Photo</button>
-        ` : ''}
       </div>
     </div>
     <div class="grid grid-3" style="margin-bottom:12px;">
@@ -1117,7 +693,7 @@ function renderEntryForm(s){
       ${quick.map(n=>`<button class="chip ${state.entry.custom===n?'selected':''}" onclick="App.setAmount(${n})">${state.entry.mode==='positive'?'+':'-'}${n}</button>`).join('')}
       <button class="chip ${state.entry.custom==='custom'?'selected':''}" onclick="App.setAmount('custom')">Custom</button>
     </div>
-    ${state.entry.custom==='custom'?`<input type="number" id="customAmountInput" placeholder="Enter point amount" oninput="App.setCustomAmount(this.value)" style="margin-bottom:12px;">`:''}
+    ${state.entry.custom==='custom'?`<input type="number" placeholder="Enter point amount" oninput="App.setCustomAmount(this.value)" style="margin-bottom:12px;">`:''}
 
     <label>Reason</label>
     <div class="chip-row" style="margin-bottom:12px;">
@@ -1125,7 +701,7 @@ function renderEntryForm(s){
     </div>
 
     <label>Note ${state.entry.mode==='negative'?'(required for deductions)':'(optional)'}</label>
-    <textarea rows="2" id="noteInput" placeholder="Add context…" oninput="App.setNote(this.value)">${state.entry.note}</textarea>
+    <textarea rows="2" placeholder="Add context…" oninput="App.setNote(this.value)">${state.entry.note}</textarea>
 
     ${state.entry.error?`<div style="background:#FDEDED;border:1.5px solid #F1B4B4;color:var(--red);font-weight:700;font-size:13px;border-radius:8px;padding:9px 12px;margin-top:12px;">⚠ ${state.entry.error}</div>`:''}
 
@@ -1159,115 +735,16 @@ function viewLeaderboard(){
   <div class="card">
     <h2>Top Individual Scholars</h2>
     <table><thead><tr><th>#</th><th>Scholar</th><th>House</th><th>Points</th></tr></thead><tbody>
-    ${top.map((s,i)=>`<tr style="cursor:pointer;" onclick="App.openScholarModal('${s.id}')"><td>${i+1}</td><td style="display:flex;align-items:center;gap:8px;">${scholarAvatar(s,28)} ${state.hideLastNames?fullName(s,true):fullName(s)}</td><td>${houseChip(houseById(s.houseId))}</td><td><strong>${s.currentPoints}</strong></td></tr>`).join('')}
+    ${top.map((s,i)=>`<tr style="cursor:pointer;" onclick="App.openScholarModal('${s.id}')"><td>${i+1}</td><td>${state.hideLastNames?fullName(s,true):fullName(s)}</td><td>${houseChip(houseById(s.houseId))}</td><td><strong>${s.currentPoints}</strong></td></tr>`).join('')}
     </tbody></table>
-  </div>`;
-}
-
-function viewHouseCup(){
-  const totals = getSelectedTermTotals();
-  const maxTotal = Math.max(1, ...HOUSES.map(h=>totals[h.id]));
-  const sorted = HOUSES.slice().sort((a,b)=>totals[b.id]-totals[a.id]);
-  const leader = sorted[0];
-  const canManage = isAdmin();
-  const upcoming = TRADITIONS.filter(t=>t.date).slice().sort((a,b)=> a.date<b.date?-1:(a.date>b.date?1:0));
-
-  return `
-  ${CUP_CHAMPION ? `
-  <div class="card" style="border:2px solid ${houseById(CUP_CHAMPION.houseId).color};">
-    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
-      <div style="font-size:40px;">🏆</div>
-      <div style="flex:1;">
-        <div class="subtle" style="text-transform:uppercase;letter-spacing:1px;">Reigning House Cup Champion</div>
-        <h2 style="margin:2px 0;color:${houseById(CUP_CHAMPION.houseId).color};">${CUP_CHAMPION.houseName}</h2>
-        <div class="subtle">Declared ${new Date(CUP_CHAMPION.declaredAt).toLocaleDateString()} with ${CUP_CHAMPION.points} points</div>
-      </div>
-      ${canManage ? `<button class="btn btn-outline" style="padding:6px 12px;font-size:12px;" onclick="App.clearCupChampion()">Clear (start a new year)</button>` : ''}
-    </div>
-  </div>` : ''}
-
-  <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:6px;">
-      <h2 style="margin:0;">👑 House Cup Standings</h2>
-      ${HOUSE_CUP_TERMS.length ? `<select onchange="App.setSelectedTerm(this.value)">
-        <option value="all" ${state.selectedTermId==='all'?'selected':''}>All-Time (Full Year)</option>
-        ${HOUSE_CUP_TERMS.map(t=>`<option value="${t.id}" ${state.selectedTermId===t.id?'selected':''}>${t.name}</option>`).join('')}
-      </select>` : ''}
-    </div>
-    ${sorted.map((h,i)=>`
-      <div class="bar-row">
-        <div style="width:28px;font-weight:800;color:${h.color}">${i===0?'👑':'#'+(i+1)}</div>
-        <div style="width:110px;font-weight:700;font-size:13px;">${houseIcon(h,18)} ${h.name}</div>
-        <div class="bar-track"><div class="bar-fill" style="width:${(totals[h.id]/maxTotal*100)}%;background:${h.color}"></div></div>
-        <div style="width:52px;text-align:right;font-weight:700;">${totals[h.id]}</div>
-      </div>`).join('')}
-    ${canManage && !CUP_CHAMPION ? `<button class="btn btn-navy" style="margin-top:12px;" onclick="App.declareCupChampion()">🏆 Declare ${leader.name} the House Cup Champion</button>` : ''}
-  </div>
-
-  ${upcoming.length ? `
-  <div class="card">
-    <h2>📅 Traditions &amp; Upcoming Events</h2>
-    <table><thead><tr><th>Date</th><th>Event</th><th>Note</th></tr></thead><tbody>
-      ${upcoming.map(t=>`<tr><td>${t.date}</td><td>${t.name}</td><td class="subtle">${t.note||'—'}</td></tr>`).join('')}
-    </tbody></table>
-  </div>` : ''}`;
-}
-
-function viewMyClass(){
-  // Local demo mode has no real teacher login to read a homeroom from, so it uses a picker
-  // instead — lets you preview the page with any homeroom's roster. In the real Firebase-backed
-  // app, this always uses the signed-in teacher's own assigned homeroom, nothing else.
-  const homeroom = FIREBASE_ENABLED
-    ? (state.staffProfile && state.staffProfile.homeroom)
-    : (state.demoHomeroom || distinctHomerooms()[0] || null);
-
-  if(!homeroom){
-    return `<div class="card">
-      <h2>🏫 My Class</h2>
-      <div class="empty">No homeroom is assigned to your account yet. Ask your administrator to set it in Manage → Staff Accounts.</div>
-    </div>`;
-  }
-
-  const myScholars = SCHOLARS.filter(s=>s.homeroom===homeroom && s.status==='active').slice().sort((a,b)=>b.currentPoints-a.currentPoints);
-  const totalPoints = myScholars.reduce((a,s)=>a+s.currentPoints,0);
-  const avgPoints = myScholars.length ? Math.round(totalPoints/myScholars.length*10)/10 : 0;
-
-  return `
-  <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
-      <h2 style="margin:0;">🏫 My Class — ${homeroom}</h2>
-      ${!FIREBASE_ENABLED ? `<select onchange="App.setDemoHomeroom(this.value)">
-        ${distinctHomerooms().map(h=>`<option value="${h}" ${homeroom===h?'selected':''}>${h}</option>`).join('')}
-      </select>` : ''}
-    </div>
-    <div class="grid grid-3" style="margin-top:10px;">
-      ${statCard(myScholars.length,'Scholars')}
-      ${statCard(totalPoints,'Total Current Points')}
-      ${statCard(avgPoints,'Average per Scholar')}
-    </div>
-    <button class="btn btn-outline" style="margin-top:10px;" onclick="App.exportMyClass()">⬇ Download My Class (.xlsx)</button>
-  </div>
-
-  <div class="card">
-    <h2>Class Roster</h2>
-    ${myScholars.length ? `<table><thead><tr><th>#</th><th>Scholar</th><th>House</th><th>Current</th><th>Lifetime</th></tr></thead><tbody>
-      ${myScholars.map((s,i)=>`<tr style="cursor:pointer;" onclick="App.openScholarModal('${s.id}')">
-        <td>${i+1}</td>
-        <td style="display:flex;align-items:center;gap:8px;">${scholarAvatar(s,24)} ${fullName(s)}</td>
-        <td>${houseChip(houseById(s.houseId))}</td>
-        <td><strong>${s.currentPoints}</strong></td>
-        <td class="subtle">${s.lifetimePoints}</td>
-      </tr>`).join('')}
-    </tbody></table>` : '<div class="empty">No scholars found for this homeroom.</div>'}
   </div>`;
 }
 
 function viewHouses(){
-  const totals = houseTotals();
   return `<div class="grid grid-2">
     ${HOUSES.map(h=>{
       const members = SCHOLARS.filter(s=>s.houseId===h.id);
-      const total = totals[h.id]; // scholar lifetime points + any competition bonus points, via houseTotals()
+      const total = members.reduce((a,s)=>a+s.currentPoints,0);
       return `<div class="card" style="border-top:5px solid ${h.color}">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
           <div class="house-crest" style="background:${h.color};overflow:hidden;">${houseIcon(h,46)}</div>
@@ -1280,50 +757,6 @@ function viewHouses(){
       </div>`;
     }).join('')}
   </div>`;
-}
-
-function viewBadges(){
-  const active = SCHOLARS.filter(s=>s.status==='active');
-  const tiers = BADGE_TIERS.slice().reverse(); // show highest tier first
-  const earners = active.filter(s=>s.lifetimePoints>=BADGE_TIERS[0].threshold);
-  const totalBadgesAwarded = active.reduce((sum,s)=>sum+badgesFor(s).length, 0);
-  const topScholar = active.slice().sort((a,b)=>b.lifetimePoints-a.lifetimePoints)[0];
-
-  return `
-  <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;">
-      <h2 style="margin:0;">Badges</h2>
-      <label style="display:flex;align-items:center;gap:6px;font-weight:400;text-transform:none;letter-spacing:0;">
-        <input type="checkbox" ${state.hideLastNames?'checked':''} onchange="App.toggleHideNames()" style="width:auto;"> Hide last names
-      </label>
-    </div>
-    <p class="subtle" style="margin-top:6px;">Every scholar earns a badge automatically the moment their Lifetime Points cross a milestone — badges never go away, even if points are later spent or subtracted.</p>
-    <div class="grid grid-3" style="margin-top:10px;">
-      ${statCard(totalBadgesAwarded,'Total Badges Earned')}
-      ${statCard(earners.length,'Scholars With a Badge')}
-      ${statCard(topScholar?(state.hideLastNames?fullName(topScholar,true):fullName(topScholar)):'—','Most Lifetime Points')}
-    </div>
-  </div>
-  ${tiers.map(tier=>{
-    const qualifiers = active.filter(s=>s.lifetimePoints>=tier.threshold).sort((a,b)=>b.lifetimePoints-a.lifetimePoints);
-    return `<div class="card">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-        <h2 style="margin:0;">${tier.icon} ${tier.label}</h2>
-        <span class="subtle">${qualifiers.length} scholar${qualifiers.length===1?'':'s'}</span>
-      </div>
-      ${qualifiers.length ? `
-        <div style="max-height:280px;overflow-y:auto;">
-          <table><thead><tr><th>Scholar</th><th>House</th><th>Lifetime Points</th></tr></thead><tbody>
-            ${qualifiers.map(s=>`<tr style="cursor:pointer;" onclick="App.openScholarModal('${s.id}')">
-              <td style="display:flex;align-items:center;gap:8px;">${scholarAvatar(s,24)} ${state.hideLastNames?fullName(s,true):fullName(s)}</td>
-              <td>${houseChip(houseById(s.houseId))}</td>
-              <td><strong>${s.lifetimePoints}</strong></td>
-            </tr>`).join('')}
-          </tbody></table>
-        </div>
-      ` : `<div class="empty">No one has reached ${tier.threshold} lifetime points yet — the first scholar to get there earns this badge!</div>`}
-    </div>`;
-  }).join('')}`;
 }
 
 function viewRewards(){
@@ -1355,7 +788,7 @@ function viewHistory(){
         const s=SCHOLARS.find(x=>x.id===t.scholarId); if(!s) return '';
         return `<tr>
           <td>${new Date(t.ts).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</td>
-          <td style="display:flex;align-items:center;gap:8px;">${scholarAvatar(s,24)} ${fullName(s)}</td>
+          <td>${fullName(s)}</td>
           <td>${houseChip(houseById(s.houseId))}</td>
           <td>${t.category}</td>
           <td class="${t.dir==='positive'?'pill-pos':'pill-neg'}">${t.amount>0?'+':''}${t.amount}</td>
@@ -1363,108 +796,6 @@ function viewHistory(){
         </tr>`;
       }).join('')}
     </tbody></table>` : '<div class="empty">No transactions recorded yet. Try adding points from Scan or Search.</div>'}
-  </div>`;
-}
-
-function viewReports(){
-  const filteredCount = filterTransactionsByReportRange(TRANSACTIONS).length;
-  return `
-  <div class="card">
-    <h2>Reports</h2>
-    <p class="subtle">Download real Excel (.xlsx) files you can open, print, filter, or share with staff and families.</p>
-  </div>
-
-  <div class="card">
-    <h2>🖨️ Printable Reference Sheets</h2>
-    <p class="subtle">A clean, ink-friendly page for posting in classrooms or handing to substitute staff — pick what to include, then use your browser's print dialog to print it or save it as a PDF.</p>
-    <div style="display:flex;flex-direction:column;gap:8px;margin:10px 0;">
-      <label style="display:flex;align-items:center;gap:8px;font-weight:400;text-transform:none;letter-spacing:0;">
-        <input id="printPos" type="checkbox" checked style="width:auto;"> Good Behavior categories (${POS_CATEGORIES.length})
-      </label>
-      <label style="display:flex;align-items:center;gap:8px;font-weight:400;text-transform:none;letter-spacing:0;">
-        <input id="printNeg" type="checkbox" checked style="width:auto;"> Disciplinary categories (${NEG_CATEGORIES.length})
-      </label>
-      <label style="display:flex;align-items:center;gap:8px;font-weight:400;text-transform:none;letter-spacing:0;">
-        <input id="printRewards" type="checkbox" checked style="width:auto;"> Rewards Catalog (${REWARDS.length})
-      </label>
-    </div>
-    <button class="btn btn-primary" onclick="App.openPrintPreview()">🖨️ Preview &amp; Print</button>
-  </div>
-
-  <div class="card">
-    <h2>📋 Full Roster</h2>
-    <p class="subtle">Every scholar — grade, homeroom, house, barcode/student ID, current points, lifetime points, reward balance, status, and badges earned.</p>
-    <button class="btn btn-primary" onclick="App.exportRoster()">⬇ Download Roster (.xlsx)</button>
-  </div>
-
-  <div class="card">
-    <h2>📜 Transaction History</h2>
-    <p class="subtle">Every point award and deduction — scholar, house, category, amount, staff role, note, and timestamp. Leave the dates blank for all-time.</p>
-    <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px;">
-      <div><label class="subtle" style="display:block;margin-bottom:4px;">From</label><input type="date" value="${state.reportFrom||''}" onchange="App.setReportFrom(this.value)"></div>
-      <div><label class="subtle" style="display:block;margin-bottom:4px;">To</label><input type="date" value="${state.reportTo||''}" onchange="App.setReportTo(this.value)"></div>
-      <span class="subtle">${filteredCount} transaction${filteredCount===1?'':'s'} match${filteredCount===1?'es':''} this range</span>
-    </div>
-    <button class="btn btn-primary" onclick="App.exportTransactions()">⬇ Download Transactions (.xlsx)</button>
-  </div>
-
-  <div class="card">
-    <h2>🛡️ House Standings</h2>
-    <p class="subtle">Lifetime point totals and scholar counts per house — same numbers shown on the Dashboard and Leaderboard.</p>
-    <button class="btn btn-primary" onclick="App.exportHouseStandings()">⬇ Download House Standings (.xlsx)</button>
-  </div>
-
-  <div class="card">
-    <h2>🏅 Badges Earned</h2>
-    <p class="subtle">Every scholar who has earned at least one Point Club badge, and which ones.</p>
-    <button class="btn btn-primary" onclick="App.exportBadges()">⬇ Download Badges (.xlsx)</button>
-  </div>
-
-  <div class="card">
-    <h2>📋 Audit Log</h2>
-    <p class="subtle">Every settings change — categories, rewards, house crests, staff accounts, terms, traditions, the Cup Champion, roster imports, and year resets — with who made it and when.</p>
-    <button class="btn btn-primary" onclick="App.exportAuditLog()">⬇ Download Audit Log (.xlsx)</button>
-  </div>`;
-}
-
-function viewCompetitions(){
-  const recent = EVENT_AWARDS.slice(0,50);
-  return `
-  <div class="card">
-    <h2>🎉 Competitions &amp; Events</h2>
-    <p class="subtle">Award bonus points to a whole house at once — for a House Rally, Field Day, trivia bowl, or any competition. These stack on top of what scholars earn individually and count toward House Standings everywhere in the app (Dashboard, Leaderboard, Houses).</p>
-    <button class="btn btn-navy btn-block" style="margin-top:10px;" onclick="App.enterLiveMode()">📺 Enter Live Event Mode</button>
-    <p class="subtle" style="margin-top:6px;">A big, projector-friendly scoreboard for assemblies — put it on a screen and award points live as the event happens.</p>
-  </div>
-
-  <div class="card">
-    <h2>Award Points to a House</h2>
-    <div class="grid grid-2" style="gap:10px;margin-bottom:10px;">
-      <div>
-        <label class="subtle" style="display:block;margin-bottom:4px;">House</label>
-        <select id="compHouseSelect">${HOUSES.map(h=>`<option value="${h.id}">${h.name}</option>`).join('')}</select>
-      </div>
-      <div>
-        <label class="subtle" style="display:block;margin-bottom:4px;">Points (use a minus sign to subtract)</label>
-        <input id="compPoints" type="number" placeholder="e.g. 25 or -10">
-      </div>
-    </div>
-    <input id="compEventName" type="text" placeholder="Event name (e.g. Fall Field Day)" style="margin-bottom:8px;">
-    <input id="compNote" type="text" placeholder="Note (e.g. 1st place — Tug of War)" style="margin-bottom:10px;">
-    <button class="btn btn-primary" onclick="App.awardEventPointsFromForm()">Award Points</button>
-  </div>
-
-  <div class="card">
-    <h2>Recent Event Awards</h2>
-    ${recent.length ? `<table><thead><tr><th>Event</th><th>House</th><th>Points</th><th>Note</th><th>When</th></tr></thead><tbody>
-      ${recent.map(e=>`<tr>
-        <td>${e.competitionName}</td>
-        <td>${houseChip(houseById(e.houseId))}</td>
-        <td class="${e.points>=0?'pill-pos':'pill-neg'}">${e.points>0?'+':''}${e.points}</td>
-        <td class="subtle">${e.note||'—'}</td>
-        <td class="subtle">${new Date(e.ts).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</td>
-      </tr>`).join('')}
-    </tbody></table>` : '<div class="empty">No competition points awarded yet.</div>'}
   </div>`;
 }
 
@@ -1487,89 +818,7 @@ function viewRulebook(){
 function viewManage(){
   const missingBarcode = SCHOLARS.filter(s=>!s.barcodeId).length;
   const unsorted = SCHOLARS.filter(s=>!s.houseId).length;
-  const displayUrl = window.location.href.split('?')[0].split('#')[0] + '?display=1';
-  return `${FIREBASE_ENABLED ? `<div class="card">
-    <h2>👤 Staff Accounts</h2>
-    <p class="subtle">Create staff logins and manage roles right here — no more editing Firebase by hand. New accounts get a temporary password you tell the staff member directly.</p>
-    <div style="max-height:300px;overflow-y:auto;margin-bottom:14px;">
-      ${STAFF_LIST.length ? STAFF_LIST.map(s=>`
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px;gap:10px;flex-wrap:wrap;">
-          <div style="flex:1;min-width:140px;">
-            <strong>${s.name||'(no name)'}</strong>
-            <div class="subtle">${s.email||''}</div>
-          </div>
-          <select onchange="App.updateStaffRole('${s.id}', this.value)" style="min-width:130px;">
-            <option value="admin" ${s.role==='admin'?'selected':''}>Administrator</option>
-            <option value="house_admin" ${s.role==='house_admin'?'selected':''}>House Admin</option>
-            <option value="teacher" ${s.role==='teacher'?'selected':''}>Teacher / Staff</option>
-            <option value="student" ${s.role==='student'?'selected':''}>Student View</option>
-          </select>
-          ${s.role==='teacher' ? `<select onchange="App.updateStaffHomeroom('${s.id}', this.value)" style="min-width:130px;">
-            <option value="">(no homeroom set)</option>
-            ${distinctHomerooms().map(h=>`<option value="${h}" ${s.homeroom===h?'selected':''}>${h}</option>`).join('')}
-          </select>` : ''}
-          ${s.role==='teacher' ? `<label style="display:flex;align-items:center;gap:4px;font-size:12px;white-space:nowrap;">
-            <input type="checkbox" ${s.canSubtract!==false?'checked':''} onchange="App.toggleStaffCanSubtract('${s.id}', this.checked)" style="width:auto;"> Can subtract
-          </label>` : ''}
-          <button class="btn btn-outline" style="padding:4px 10px;font-size:11px;" onclick="App.removeStaffMember('${s.id}', '${(s.name||'this account').replace(/'/g,"\\'")}')">Revoke Access</button>
-        </div>`).join('') : '<div class="empty">No staff accounts yet — add the first one below.</div>'}
-    </div>
-
-    <h3 style="font-size:14px;margin-bottom:8px;">Add a Staff Account</h3>
-    <div class="grid grid-2" style="gap:10px;margin-bottom:10px;">
-      <input id="newStaffName" type="text" placeholder="Full name (e.g. Ms. Rivera)">
-      <input id="newStaffEmail" type="email" placeholder="Email address">
-    </div>
-    <div class="grid grid-2" style="gap:10px;margin-bottom:10px;">
-      <div style="display:flex;gap:6px;">
-        <input id="newStaffPassword" type="text" placeholder="Temporary password (6+ chars)" style="flex:1;">
-        <button class="btn btn-outline" style="padding:8px 10px;font-size:12px;" onclick="App.generateStaffPassword()">🎲</button>
-      </div>
-      <select id="newStaffRole">
-        <option value="teacher">Teacher / Staff</option>
-        <option value="house_admin">House Admin</option>
-        <option value="admin">Administrator</option>
-      </select>
-    </div>
-    <div style="margin-bottom:10px;">
-      <label class="subtle" style="display:block;margin-bottom:4px;">Homeroom (only used for Teacher / Staff, for the "My Class" report — ignored for other roles)</label>
-      <select id="newStaffHomeroom">
-        <option value="">(no homeroom)</option>
-        ${distinctHomerooms().map(h=>`<option value="${h}">${h}</option>`).join('')}
-      </select>
-    </div>
-    <label style="display:flex;align-items:center;gap:6px;margin-bottom:10px;font-size:13px;">
-      <input id="newStaffCanSubtract" type="checkbox" checked style="width:auto;"> Can subtract points (only matters for Teacher / Staff — Admins and House Admins can always subtract)
-    </label>
-    <button class="btn btn-primary" onclick="App.addStaffMember()">Create Staff Account</button>
-    <p class="subtle" style="margin-top:8px;">After creating, tell the staff member their email and temporary password so they can sign in. To send a password-reset link instead of sharing a password directly, use Firebase console → Authentication → Reset password.</p>
-  </div>` : ''}
-
-  <div class="card">
-    <h2>📋 Audit Log</h2>
-    <p class="subtle">A record of who changed what — categories, rewards, house crests, staff accounts, terms, the traditions calendar, the Cup Champion, roster imports, and year resets. Everyday point awards/deductions aren't duplicated here — see History for those.</p>
-    <div style="max-height:320px;overflow-y:auto;margin-top:10px;">
-      ${AUDIT_LOG.length ? `<table><thead><tr><th>When</th><th>Staff</th><th>Action</th><th>Details</th></tr></thead><tbody>
-        ${AUDIT_LOG.slice(0,100).map(a=>`<tr>
-          <td class="subtle" style="white-space:nowrap;">${new Date(a.ts).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</td>
-          <td>${a.staffName}</td>
-          <td>${a.action}</td>
-          <td class="subtle">${a.details||''}</td>
-        </tr>`).join('')}
-      </tbody></table>` : '<div class="empty">No changes logged yet — this fills in as settings get edited.</div>'}
-    </div>
-    ${AUDIT_LOG.length>100 ? `<div class="subtle" style="margin-top:8px;">Showing the most recent 100 of ${AUDIT_LOG.length}.</div>` : ''}
-  </div>
-
-  <div class="card">
-    <h2>📺 Public Display Mode</h2>
-    <p class="subtle">A read-only scoreboard for a hallway TV, front office monitor, or lobby screen — no login, nothing editable, just auto-cycling House Cup standings, top scholars, badge milestones, and upcoming events, updating live as points come in.</p>
-    <p class="subtle" style="margin-top:8px;">Open this on the display device:</p>
-    <input type="text" readonly value="${displayUrl}" style="font-size:12px;" onclick="this.select()">
-    ${FIREBASE_ENABLED ? `<p class="subtle" style="margin-top:8px;">Requires <strong>Anonymous sign-in</strong> enabled in Firebase (console → Authentication → Sign-in method) once your database is locked down — see the README.</p>` : `<p class="subtle" style="margin-top:8px;">Works right away in local demo mode — no Firebase needed for testing.</p>`}
-  </div>
-
-  <div class="card">
+  return `<div class="card">
     <h2>House Crest Images</h2>
     <p class="subtle">Upload a logo or crest for each house to replace the default mascot icon everywhere in the app. Square images work best, and please keep each file under ~500KB.</p>
     <div class="grid grid-3">
@@ -1583,218 +832,10 @@ function viewManage(){
   </div>
 
   <div class="card">
-    <h2>Point Categories</h2>
-    <p class="subtle">These are the reasons staff pick from when adding or subtracting points. Add your own, or remove ones you don't use (each list needs at least one).</p>
-    <div class="grid grid-2">
-      <div>
-        <h3 style="margin:0 0 8px;font-size:14px;">🟢 Good Behavior (adds points)</h3>
-        <div style="max-height:260px;overflow-y:auto;margin-bottom:10px;">
-          ${POS_CATEGORIES.map(c=>{
-            const editing = state.editingItem && state.editingItem.type==='pos' && state.editingItem.id===c.id;
-            return editing ? `<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--line);">
-              <input id="editName-${c.id}" type="text" value="${c.name.replace(/"/g,'&quot;')}" style="flex:2;font-size:13px;padding:4px 6px;">
-              <input id="editPts-${c.id}" type="number" min="1" value="${c.pts}" style="flex:1;font-size:13px;padding:4px 6px;">
-              <button class="btn btn-primary" style="padding:2px 8px;font-size:11px;" onclick="App.saveEditCategory('pos','${c.id}', document.getElementById('editName-${c.id}').value, document.getElementById('editPts-${c.id}').value)">Save</button>
-              <button class="btn btn-outline" style="padding:2px 8px;font-size:11px;" onclick="App.cancelEditCategory()">Cancel</button>
-            </div>` : `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--line);font-size:13px;">
-            <span>${c.name} <span class="subtle">(+${c.pts})</span></span>
-            <span>
-              <button class="btn btn-outline" style="padding:2px 8px;font-size:11px;" onclick="App.editPosCategoryName('${c.id}')">Edit</button>
-              <button class="btn btn-outline" style="padding:2px 8px;font-size:11px;" onclick="App.removePosCategory('${c.id}')">Remove</button>
-            </span>
-          </div>`;
-          }).join('')}
-        </div>
-        <div style="display:flex;gap:6px;">
-          <input id="newPosCatName" type="text" placeholder="Category name" style="flex:2;">
-          <input id="newPosCatPts" type="number" min="1" placeholder="Pts" style="flex:1;">
-          <button class="btn btn-primary" style="padding:8px 12px;font-size:12px;" onclick="App.addPosCategory(document.getElementById('newPosCatName').value, document.getElementById('newPosCatPts').value); document.getElementById('newPosCatName').value=''; document.getElementById('newPosCatPts').value='';">Add</button>
-        </div>
-      </div>
-      <div>
-        <h3 style="margin:0 0 8px;font-size:14px;">🔴 Disciplinary (subtracts points)</h3>
-        <div style="max-height:260px;overflow-y:auto;margin-bottom:10px;">
-          ${NEG_CATEGORIES.map(c=>{
-            const editing = state.editingItem && state.editingItem.type==='neg' && state.editingItem.id===c.id;
-            return editing ? `<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--line);">
-              <input id="editName-${c.id}" type="text" value="${c.name.replace(/"/g,'&quot;')}" style="flex:2;font-size:13px;padding:4px 6px;">
-              <input id="editPts-${c.id}" type="number" min="1" value="${Math.abs(c.pts)}" style="flex:1;font-size:13px;padding:4px 6px;">
-              <button class="btn btn-primary" style="padding:2px 8px;font-size:11px;" onclick="App.saveEditCategory('neg','${c.id}', document.getElementById('editName-${c.id}').value, document.getElementById('editPts-${c.id}').value)">Save</button>
-              <button class="btn btn-outline" style="padding:2px 8px;font-size:11px;" onclick="App.cancelEditCategory()">Cancel</button>
-            </div>` : `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--line);font-size:13px;">
-            <span>${c.name} <span class="subtle">(${c.pts})</span></span>
-            <span>
-              <button class="btn btn-outline" style="padding:2px 8px;font-size:11px;" onclick="App.editNegCategoryName('${c.id}')">Edit</button>
-              <button class="btn btn-outline" style="padding:2px 8px;font-size:11px;" onclick="App.removeNegCategory('${c.id}')">Remove</button>
-            </span>
-          </div>`;
-          }).join('')}
-        </div>
-        <div style="display:flex;gap:6px;">
-          <input id="newNegCatName" type="text" placeholder="Category name" style="flex:2;">
-          <input id="newNegCatPts" type="number" min="1" placeholder="Pts" style="flex:1;">
-          <button class="btn btn-primary" style="padding:8px 12px;font-size:12px;" onclick="App.addNegCategory(document.getElementById('newNegCatName').value, document.getElementById('newNegCatPts').value); document.getElementById('newNegCatName').value=''; document.getElementById('newNegCatPts').value='';">Add</button>
-        </div>
-        <p class="subtle" style="margin-top:6px;">Just enter a positive number — it's subtracted automatically.</p>
-      </div>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>Rewards Catalog</h2>
-    <p class="subtle">What scholars can redeem their Reward Balance for. Add your own, or remove ones you don't offer.</p>
-    <div style="max-height:280px;overflow-y:auto;margin-bottom:10px;">
-      ${REWARDS.map(r=>{
-        const editing = state.editingItem && state.editingItem.type==='reward' && state.editingItem.id===r.id;
-        return editing ? `<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--line);">
-          <input id="editName-${r.id}" type="text" value="${r.name.replace(/"/g,'&quot;')}" style="flex:2;font-size:13px;padding:4px 6px;">
-          <input id="editCost-${r.id}" type="number" min="1" value="${r.cost}" style="flex:1;font-size:13px;padding:4px 6px;">
-          <button class="btn btn-primary" style="padding:2px 8px;font-size:11px;" onclick="App.saveEditReward('${r.id}', document.getElementById('editName-${r.id}').value, document.getElementById('editCost-${r.id}').value)">Save</button>
-          <button class="btn btn-outline" style="padding:2px 8px;font-size:11px;" onclick="App.cancelEditCategory()">Cancel</button>
-        </div>` : `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--line);font-size:13px;">
-        <span>${r.name} <span class="subtle">(${r.cost} pts · ${r.cat})</span></span>
-        <span>
-          <button class="btn btn-outline" style="padding:2px 8px;font-size:11px;" onclick="App.editRewardName('${r.id}')">Edit</button>
-          <button class="btn btn-outline" style="padding:2px 8px;font-size:11px;" onclick="App.removeReward('${r.id}')">Remove</button>
-        </span>
-      </div>`;
-      }).join('')}
-    </div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;">
-      <input id="newRewardName" type="text" placeholder="Reward name" style="flex:2;min-width:140px;">
-      <input id="newRewardCost" type="number" min="1" placeholder="Cost" style="flex:1;min-width:70px;">
-      <input id="newRewardCat" type="text" placeholder="Category (e.g. Privilege)" style="flex:1;min-width:140px;">
-      <button class="btn btn-primary" style="padding:8px 12px;font-size:12px;" onclick="App.addReward(document.getElementById('newRewardName').value, document.getElementById('newRewardCost').value, document.getElementById('newRewardCat').value); document.getElementById('newRewardName').value=''; document.getElementById('newRewardCost').value=''; document.getElementById('newRewardCat').value='';">Add</button>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>House Cup Terms</h2>
-    <p class="subtle">Optional date ranges (e.g. "Term 1", "Fall Semester") so the House Cup page can show standings for just that period, not only all-time. Leave From/To blank for an open-ended term.</p>
-    <div style="max-height:220px;overflow-y:auto;margin-bottom:10px;">
-      ${HOUSE_CUP_TERMS.map(t=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--line);font-size:13px;">
-        <span>${t.name} <span class="subtle">(${t.from||'…'} → ${t.to||'…'})</span></span>
-        <button class="btn btn-outline" style="padding:2px 8px;font-size:11px;" onclick="App.removeCupTerm('${t.id}')">Remove</button>
-      </div>`).join('') || '<div class="subtle">No terms yet — the House Cup page will just show All-Time standings.</div>'}
-    </div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;">
-      <input id="newTermName" type="text" placeholder="Term name" style="flex:2;min-width:120px;">
-      <input id="newTermFrom" type="date" style="flex:1;">
-      <input id="newTermTo" type="date" style="flex:1;">
-      <button class="btn btn-primary" style="padding:8px 12px;font-size:12px;" onclick="App.addCupTerm(document.getElementById('newTermName').value, document.getElementById('newTermFrom').value, document.getElementById('newTermTo').value); document.getElementById('newTermName').value=''; document.getElementById('newTermFrom').value=''; document.getElementById('newTermTo').value='';">Add</button>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>Traditions Calendar</h2>
-    <p class="subtle">Recurring school traditions and events (Founders Day, Field Day, etc.) so staff can see what's coming on the House Cup page. Informational only — doesn't affect scoring.</p>
-    <div style="max-height:220px;overflow-y:auto;margin-bottom:10px;">
-      ${TRADITIONS.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'')).map(t=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--line);font-size:13px;">
-        <span>${t.date||'(no date)'} — ${t.name}${t.note?` <span class="subtle">(${t.note})</span>`:''}</span>
-        <button class="btn btn-outline" style="padding:2px 8px;font-size:11px;" onclick="App.removeTradition('${t.id}')">Remove</button>
-      </div>`).join('') || '<div class="subtle">No events on the calendar yet.</div>'}
-    </div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;">
-      <input id="newTradName" type="text" placeholder="Event name" style="flex:2;min-width:120px;">
-      <input id="newTradDate" type="date" style="flex:1;">
-      <input id="newTradNote" type="text" placeholder="Note (optional)" style="flex:1;min-width:120px;">
-      <button class="btn btn-primary" style="padding:8px 12px;font-size:12px;" onclick="App.addTradition(document.getElementById('newTradName').value, document.getElementById('newTradDate').value, document.getElementById('newTradNote').value); document.getElementById('newTradName').value=''; document.getElementById('newTradDate').value=''; document.getElementById('newTradNote').value='';">Add</button>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>Scholar Photos</h2>
-    <p class="subtle">Select all your scholar photos at once. Each file should be named after the scholar's <strong>Barcode ID</strong> or <strong>Student ID</strong> (e.g. <code>3825.jpg</code>) — that's how the app matches each photo to the right scholar. Photos are automatically resized, so file size isn't a concern.
-      ${!FIREBASE_ENABLED ? ' <strong>Local demo mode:</strong> photos only last for this browser tab and won\'t be saved — connect Firebase to keep them.' : ''}
-    </p>
-    <input type="file" accept="image/*" multiple onchange="App.importPhotos(this.files)">
-    ${state.photoImport ? `
-      <div class="subtle" style="margin-top:10px;">
-        ${state.photoImport.done < state.photoImport.total
-          ? `Uploading ${state.photoImport.done} of ${state.photoImport.total}…`
-          : `Done — ${state.photoImport.matched} matched and saved, ${state.photoImport.unmatched.length} unmatched.`}
-      </div>
-      ${state.photoImport.unmatched.length ? `
-        <div style="margin-top:6px;">
-          <strong style="font-size:12px;">Unmatched filenames</strong> — rename these to a scholar's Barcode/Student ID and re-upload just these:
-          <ul style="margin:6px 0 0 18px;font-size:12px;">${state.photoImport.unmatched.map(n=>`<li>${n}</li>`).join('')}</ul>
-        </div>` : ''}
-      ${state.photoImport.done >= state.photoImport.total ? `<button class="btn btn-outline" style="margin-top:8px;padding:6px 12px;font-size:12px;" onclick="App.dismissPhotoImport()">Dismiss</button>` : ''}
-    ` : ''}
-  </div>
-
-  <div class="card">
     <h2>Import Roster (CSV or Excel)</h2>
     <p class="subtle">Upload an updated roster any time (e.g. a refreshed <code>Master_Carver_Roster</code> file). Matches columns named: Barcode ID, Student ID, First Name, Last Name, Grade, House, Teacher Name, Current Points, Lifetime Points, Store Rewards Balance, Parent Name, Parent Email, Parent Phone, Status, Notes. <strong>This replaces the current roster.</strong></p>
     <input type="file" id="rosterFile" accept=".csv,.xlsx,.xls" onchange="App.importRoster(this.files[0])">
     <div id="importStatus" class="subtle" style="margin-top:8px;"></div>
-    ${state.pendingImport ? `
-      <div style="background:#FFF9EE;border:1.5px solid var(--gold);border-radius:10px;padding:14px;margin-top:10px;">
-        <strong>Replace the current roster of ${state.pendingImport.previousCount} scholars with ${state.pendingImport.scholars.length} from this file?</strong>
-        <div class="subtle" style="margin-top:6px;">${state.pendingImport.missingBarcode} missing a barcode ID · ${state.pendingImport.unsorted} not yet sorted into a House. This cannot be undone.</div>
-        <div style="display:flex;gap:10px;margin-top:12px;">
-          <button class="btn btn-primary" onclick="App.confirmRosterImport()">Yes, Replace Roster</button>
-          <button class="btn btn-outline" onclick="App.cancelRosterImport()">Cancel</button>
-        </div>
-      </div>
-    ` : ''}
-  </div>
-
-  <div class="card">
-    <h2>📥 Import Points from ClassDojo (or any spreadsheet)</h2>
-    <p class="subtle">ClassDojo doesn't offer live sync to outside apps — the only way its point data comes out is a spreadsheet a School Leader or teacher downloads. Upload that file here and each row becomes its own point entry for the matching scholar, matched by name. Works with any CSV/Excel file that has a name column and a points column, not just ClassDojo's.</p>
-    <input type="file" id="externalImportFile" accept=".csv,.xlsx,.xls" onchange="App.uploadExternalImportFile(this.files[0])">
-
-    ${state.externalImport && state.externalImport.stage==='mapping' ? `
-      <div style="background:#F5F8FF;border:1.5px solid var(--navy);border-radius:10px;padding:14px;margin-top:12px;">
-        <strong>Match up the columns</strong>
-        <p class="subtle" style="margin-top:4px;">${state.externalImport.rows.length} rows found. Confirm which column is which (best guesses are pre-selected).</p>
-        <div class="grid grid-3" style="gap:10px;margin-top:10px;">
-          <div>
-            <label class="subtle" style="display:block;margin-bottom:4px;">Student Name column</label>
-            <select onchange="App.setExternalImportMapping('nameCol', this.value)">
-              ${state.externalImport.headers.map(h=>`<option value="${h}" ${state.externalImport.mapping.nameCol===h?'selected':''}>${h}</option>`).join('')}
-            </select>
-          </div>
-          <div>
-            <label class="subtle" style="display:block;margin-bottom:4px;">Points column</label>
-            <select onchange="App.setExternalImportMapping('pointsCol', this.value)">
-              ${state.externalImport.headers.map(h=>`<option value="${h}" ${state.externalImport.mapping.pointsCol===h?'selected':''}>${h}</option>`).join('')}
-            </select>
-          </div>
-          <div>
-            <label class="subtle" style="display:block;margin-bottom:4px;">Skill/Category column (optional)</label>
-            <select onchange="App.setExternalImportMapping('categoryCol', this.value)">
-              <option value="">(none — label all as "ClassDojo Import")</option>
-              ${state.externalImport.headers.map(h=>`<option value="${h}" ${state.externalImport.mapping.categoryCol===h?'selected':''}>${h}</option>`).join('')}
-            </select>
-          </div>
-        </div>
-        <div style="display:flex;gap:10px;margin-top:12px;">
-          <button class="btn btn-primary" onclick="App.previewExternalImport()">Preview Matches</button>
-          <button class="btn btn-outline" onclick="App.cancelExternalImport()">Cancel</button>
-        </div>
-      </div>
-    ` : ''}
-
-    ${state.externalImport && state.externalImport.stage==='preview' ? `
-      <div style="background:#FFF9EE;border:1.5px solid var(--gold);border-radius:10px;padding:14px;margin-top:12px;">
-        <strong>${state.externalImport.matched.length} entries matched to scholars${state.externalImport.unmatched.length ? ', '+state.externalImport.unmatched.length+' unmatched' : ''}.</strong>
-        <p class="subtle" style="margin-top:4px;">This will create ${state.externalImport.matched.length} individual point transactions — visible in History same as any other award, tagged "Imported from external point system."</p>
-        ${state.externalImport.unmatched.length ? `
-          <div style="margin-top:10px;max-height:160px;overflow-y:auto;">
-            <strong style="font-size:12px;">Unmatched names</strong> — these didn't match anyone in the roster (check spelling or nicknames):
-            <ul style="margin:6px 0 0 18px;font-size:12px;">${state.externalImport.unmatched.slice(0,50).map(u=>`<li>${u.rawName} (${u.points>0?'+':''}${u.points})</li>`).join('')}</ul>
-            ${state.externalImport.unmatched.length>50?`<div class="subtle">…and ${state.externalImport.unmatched.length-50} more.</div>`:''}
-          </div>
-        ` : ''}
-        <div style="display:flex;gap:10px;margin-top:12px;">
-          <button class="btn btn-primary" onclick="App.confirmExternalImport()" ${!state.externalImport.matched.length?'disabled':''}>Import ${state.externalImport.matched.length} Entries</button>
-          <button class="btn btn-outline" onclick="App.backToExternalImportMapping()">← Back</button>
-          <button class="btn btn-outline" onclick="App.cancelExternalImport()">Cancel</button>
-        </div>
-      </div>
-    ` : ''}
   </div>
 
   <div class="card">
@@ -1807,46 +848,9 @@ function viewManage(){
     <p class="subtle">Full inline add/edit/archive ships with the production build (see BLUEPRINT.md). Below is the live roster.</p>
     <input id="searchQueryInput" type="text" placeholder="Filter roster…" value="${state.searchQuery}" oninput="App.setSearchQuery(this.value)" style="margin-bottom:10px;">
     <table><thead><tr><th>Scholar</th><th>Grade</th><th>House</th><th>Barcode</th><th>Status</th><th>Points</th></tr></thead><tbody>
-      ${(state.searchQuery?searchScholars(state.searchQuery):SCHOLARS.slice(0,60)).map(s=>`<tr style="cursor:pointer;" onclick="App.openScholarModal('${s.id}')"><td style="display:flex;align-items:center;gap:8px;">${scholarAvatar(s,24)} ${fullName(s)}</td><td>${s.grade}</td><td>${houseChip(houseById(s.houseId))}</td><td>${s.barcodeId||'<span class="pill-neg">none</span>'}</td><td>${s.status}</td><td>${s.currentPoints}</td></tr>`).join('')}
+      ${(state.searchQuery?searchScholars(state.searchQuery):SCHOLARS.slice(0,60)).map(s=>`<tr style="cursor:pointer;" onclick="App.openScholarModal('${s.id}')"><td>${fullName(s)}</td><td>${s.grade}</td><td>${houseChip(houseById(s.houseId))}</td><td>${s.barcodeId||'<span class="pill-neg">none</span>'}</td><td>${s.status}</td><td>${s.currentPoints}</td></tr>`).join('')}
     </tbody></table>
     ${!state.searchQuery && SCHOLARS.length>60?`<div class="subtle" style="margin-top:8px;">Showing first 60 of ${SCHOLARS.length} — use the filter above to find a specific scholar.</div>`:''}
-  </div>
-
-  <div class="card" style="border:2px solid var(--red);">
-    <h2>🎓 New School Year Reset</h2>
-    <p class="subtle">Once a school year is over, use this to archive its final House Cup standings, champion, and every scholar's badges — then reset every scholar to 0 points so the new year starts clean. This does <strong>not</strong> touch the roster itself (names, grades, houses stay), staff accounts, point categories, or rewards — only points, badges, and event awards reset. Transaction history is never deleted (it's timestamped and can still be filtered in Reports), but the app only keeps the most recent 300 loaded live — export anything older via Reports before starting a new year if you'll want the full detail later.</p>
-
-    ${!state.yearResetPreview ? `
-      <label class="subtle" style="display:block;margin:10px 0 4px;">Label for the year being archived</label>
-      <input id="yearResetLabel" type="text" placeholder="e.g. 2025–2026" style="margin-bottom:10px;max-width:260px;">
-      <button class="btn btn-outline" style="border-color:var(--red);color:var(--red);" onclick="App.previewYearReset()">Preview &amp; Archive…</button>
-    ` : `
-      <div style="background:#FFF5F5;border:1.5px solid var(--red);border-radius:10px;padding:14px;margin-top:10px;">
-        <strong style="color:var(--red);">This will archive "${state.yearResetPreview.label}" and reset ${state.yearResetPreview.scholarCount} scholars to 0 points. This cannot be undone from within the app.</strong>
-        <div class="grid grid-2" style="margin-top:12px;gap:10px;">
-          ${HOUSES.map(h=>`<div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px solid var(--line);"><span>${h.name}</span><strong>${state.yearResetPreview.houseTotals[h.id]||0} pts</strong></div>`).join('')}
-        </div>
-        <div class="subtle" style="margin-top:10px;">
-          ${state.yearResetPreview.champion ? `🏆 Champion: <strong>${state.yearResetPreview.champion.houseName}</strong> · ` : ''}
-          ${state.yearResetPreview.badgeEarnerCount} scholar${state.yearResetPreview.badgeEarnerCount===1?'':'s'} earned at least one badge this year
-        </div>
-        <label class="subtle" style="display:block;margin:14px 0 4px;">Type <strong>RESET</strong> to confirm</label>
-        <input id="yearResetConfirmText" type="text" placeholder="RESET" style="max-width:180px;margin-bottom:10px;">
-        <div style="display:flex;gap:10px;">
-          <button class="btn" style="background:var(--red);color:#fff;" onclick="App.confirmYearReset()">Archive &amp; Reset Now</button>
-          <button class="btn btn-outline" onclick="App.cancelYearReset()">Cancel</button>
-        </div>
-      </div>
-    `}
-
-    ${YEAR_ARCHIVES.length ? `
-      <h3 style="font-size:14px;margin:18px 0 8px;">Past Years</h3>
-      ${YEAR_ARCHIVES.map(a=>`<div style="padding:8px 0;border-bottom:1px solid var(--line);font-size:13px;">
-        <strong>${a.label}</strong> <span class="subtle">— archived ${new Date(a.archivedAt).toLocaleDateString()}</span>
-        ${a.champion ? ` · 🏆 ${a.champion.houseName}` : ''}
-        <div class="subtle">${HOUSES.map(h=>`${h.name}: ${a.houseTotals[h.id]||0}`).join(' · ')}</div>
-      </div>`).join('')}
-    ` : ''}
   </div>`;
 }
 
@@ -1889,67 +893,26 @@ function renderGlobalModal(){
 }
 
 /* ============================= MAIN RENDER ============================= */
-// Every render() call rebuilds the page's HTML from scratch and replaces it wholesale — simple
-// and reliable, but it means the DOM node for whatever input you're typing into gets destroyed
-// and recreated on every keystroke, which would normally kick focus out of the field after each
-// character. setAppHTML() fixes that: it remembers which input (by id) had focus and where the
-// cursor was, swaps the HTML, then restores both — so typing anywhere in the app (search boxes,
-// the login form, Live Event Mode's event-name field, etc.) works like a normal text field.
-function setAppHTML(html){
-  const active = document.activeElement;
-  const activeId = active && active.id;
-  const isTextInput = activeId && active && (active.tagName==='INPUT' || active.tagName==='TEXTAREA');
-  let selStart=null, selEnd=null;
-  if(isTextInput){
-    try{ selStart = active.selectionStart; selEnd = active.selectionEnd; }catch(e){ /* some input types (number, email) don't support selection ranges in every browser */ }
-  }
-  document.getElementById('app').innerHTML = html;
-  if(isTextInput){
-    const el = document.getElementById(activeId);
-    if(el){
-      el.focus();
-      if(selStart!=null && el.setSelectionRange){
-        try{ el.setSelectionRange(selStart, selEnd); }catch(e){}
-      }
-    }
-  }
-}
 function render(){
-  if(PUBLIC_DISPLAY_MODE){
-    setAppHTML(renderPublicDisplay());
-    return;
-  }
   if(FIREBASE_ENABLED && !state.authUser){
-    setAppHTML(renderLoginScreen());
-    return;
-  }
-  if(state.liveEventMode){
-    setAppHTML(renderLiveEventMode());
-    return;
-  }
-  if(state.printMode){
-    setAppHTML(renderPrintPreview());
+    document.getElementById('app').innerHTML = renderLoginScreen();
     return;
   }
   let body='';
   switch(state.tab){
     case 'dashboard': body = state.role==='student' ? viewScanSearch('scan') : viewDashboard(); break;
+    case 'housecup': body = viewHouseCup(); break;
     case 'scan': body = viewScanSearch('scan'); break;
     case 'search': body = viewScanSearch('search'); break;
     case 'leaderboard': body = viewLeaderboard(); break;
-    case 'housecup': body = viewHouseCup(); break;
     case 'houses': body = viewHouses(); break;
-    case 'myclass': body = viewMyClass(); break;
-    case 'badges': body = viewBadges(); break;
     case 'rewards': body = viewRewards(); break;
     case 'history': body = viewHistory(); break;
-    case 'reports': body = (state.role==='admin'||state.role==='house_admin') ? viewReports() : '<div class="empty">Admin or House Admin access required.</div>'; break;
-    case 'competitions': body = (state.role==='admin'||state.role==='house_admin') ? viewCompetitions() : '<div class="empty">Admin or House Admin access required.</div>'; break;
     case 'rulebook': body = viewRulebook(); break;
     case 'manage': body = isAdmin() ? viewManage() : '<div class="empty">Admin access required.</div>'; break;
     default: body = viewDashboard();
   }
-  setAppHTML(`
+  document.getElementById('app').innerHTML = `
     ${renderTopbar()}
     ${renderDesktopNav()}
     <main>${body}</main>
@@ -1957,7 +920,7 @@ function render(){
     ${state.toast?`<div class="toast">${state.toast}</div>`:''}
     ${renderGlobalModal()}
     ${renderMoreMenu()}
-  `);
+  `;
   if(state.camOpen) startCamera('camview');
   if(state.globalCamOpen) startCamera('globalCamview');
 }
@@ -1985,24 +948,13 @@ window.App = {
   setTab(t){ state.tab=t; state.selectedScholarId=null; state.entry={mode:null,category:null,custom:null,note:'',error:null}; state.camOpen=false; state.globalPanel=null; state.globalCamOpen=false; state.moreMenuOpen=false; stopCamera(); render(); },
   toggleMoreMenu(){ state.moreMenuOpen=!state.moreMenuOpen; render(); },
   setScanInput(v){ state.scanInput=v; },
-  setSearchQuery(v){ state.searchQuery=v; render(); },
+  setSearchQuery(v){ state.searchQuery=v; render();
+    setTimeout(()=>{ const el=document.getElementById('searchQueryInput'); if(el){ el.focus(); el.selectionStart=el.selectionEnd=el.value.length; } },0); },
   submitScan(code){
     if(!code || !code.trim()){ return; }
     const s = findByBarcode(code);
-    // Deliberately NOT clearing the input on a failed lookup — leaving the scanned code visible
-    // is exactly what lets someone spot a mis-scan or typo, instead of just a blank box and a
-    // toast that's already faded by the time they look up. Selecting the text means the very
-    // next scan overwrites it cleanly instead of the two barcodes running together.
-    if(!s){
-      toast('⚠ Barcode not found: '+code);
-      setTimeout(()=>{ const el=document.getElementById('barcodeInput'); if(el){ el.focus(); el.select(); } },50);
-      return;
-    }
-    if(s.status!=='active'){
-      toast('⚠ '+fullName(s)+' is marked inactive.');
-      setTimeout(()=>{ const el=document.getElementById('barcodeInput'); if(el){ el.focus(); el.select(); } },50);
-      return;
-    }
+    if(!s){ toast('⚠ Barcode not found: '+code); state.scanInput=''; render(); return; }
+    if(s.status!=='active'){ toast('⚠ '+fullName(s)+' is marked inactive.'); state.scanInput=''; render(); return; }
     state.selectedScholarId = s.id; state.scanInput=''; state.camOpen=false; render();
     setTimeout(()=>{ const el=document.getElementById('barcodeInput'); if(el) el.focus(); },50);
   },
@@ -2056,23 +1008,14 @@ window.App = {
     setTimeout(()=>{ const el=document.getElementById('globalSearchInput'); if(el) el.focus(); },50); },
   openGlobalScan(){ state.globalPanel='scan'; state.globalScanInput=''; state.globalCamOpen=false; render();
     setTimeout(()=>{ const el=document.getElementById('globalBarcodeInput'); if(el) el.focus(); },50); },
-  setGlobalSearch(v){ state.globalSearchQuery=v; render(); },
+  setGlobalSearch(v){ state.globalSearchQuery=v; render();
+    setTimeout(()=>{ const el=document.getElementById('globalSearchInput'); if(el){ el.focus(); el.selectionStart=el.selectionEnd=el.value.length; } },0); },
   setGlobalScanInput(v){ state.globalScanInput=v; },
   submitGlobalScan(code){
     if(!code || !code.trim()) return;
     const s = findByBarcode(code);
-    // Same reasoning as submitScan: leave the scanned code visible (and selected, so the next
-    // scan cleanly overwrites it) instead of an empty box and a toast that's easy to miss.
-    if(!s){
-      toast('⚠ Barcode not found: '+code);
-      setTimeout(()=>{ const el=document.getElementById('globalBarcodeInput'); if(el){ el.focus(); el.select(); } },50);
-      return;
-    }
-    if(s.status!=='active'){
-      toast('⚠ '+fullName(s)+' is marked inactive.');
-      setTimeout(()=>{ const el=document.getElementById('globalBarcodeInput'); if(el){ el.focus(); el.select(); } },50);
-      return;
-    }
+    if(!s){ toast('⚠ Barcode not found: '+code); state.globalScanInput=''; render(); return; }
+    if(s.status!=='active'){ toast('⚠ '+fullName(s)+' is marked inactive.'); state.globalScanInput=''; render(); return; }
     App.openScholarModal(s.id);
   },
   openScholarModal(id){
@@ -2091,7 +1034,6 @@ window.App = {
       const dataUrl = e.target.result;
       const h = houseById(houseId);
       h.crestImage = dataUrl;
-      logAudit('House crest updated', h.name);
       if(FIREBASE_ENABLED){
         db.collection('settings').doc('houseImages').set({[houseId]: dataUrl}, {merge:true})
           .then(()=> toast('✔ '+h.name+' crest updated — synced to every device.'))
@@ -2102,447 +1044,6 @@ window.App = {
       render();
     };
     reader.readAsDataURL(file);
-  },
-  // Bulk photo import: pick many files at once, each named after a scholar's barcode ID,
-  // student ID, or record ID (e.g. "3825.jpg"). Unmatched filenames are reported so staff can
-  // rename and re-upload just those.
-  importPhotos(fileList){
-    const files = Array.from(fileList || []);
-    if(!files.length) return;
-    state.photoImport = {total:files.length, done:0, matched:0, unmatched:[]};
-    render();
-    (async ()=>{
-      for(const file of files){
-        const scholar = matchScholarByPhotoFilename(file.name);
-        if(!scholar){
-          state.photoImport.unmatched.push(file.name);
-          state.photoImport.done++; render();
-          continue;
-        }
-        try{
-          const blob = await resizeImageToBlob(file, 300, 0.82);
-          await setScholarPhoto(scholar, blob);
-          state.photoImport.matched++;
-        }catch(err){
-          state.photoImport.unmatched.push(file.name+' (upload failed: '+err.message+')');
-        }
-        state.photoImport.done++;
-        render();
-      }
-      const {matched, unmatched} = state.photoImport;
-      toast('📷 Photo import finished: '+matched+' matched'+(unmatched.length?', '+unmatched.length+' unmatched':'')+'.');
-    })();
-  },
-  dismissPhotoImport(){ state.photoImport=null; render(); },
-  // Single-photo update from a scholar's profile card (admin only).
-  changeScholarPhoto(scholarId, inputEl){
-    const file = inputEl.files && inputEl.files[0];
-    if(!file) return;
-    const scholar = SCHOLARS.find(s=>s.id===scholarId);
-    if(!scholar) return;
-    resizeImageToBlob(file, 400, 0.85)
-      .then(blob=> setScholarPhoto(scholar, blob))
-      .then(()=>{ toast('📷 Photo updated for '+fullName(scholar)+'.'); render(); })
-      .catch(err=> toast('⚠ '+err.message));
-    inputEl.value='';
-  },
-  // --- Point categories & rewards catalog (Manage tab) ---
-  addPosCategory(name, pts){
-    name=(name||'').trim(); pts=parseInt(pts,10);
-    if(!name || isNaN(pts) || pts<=0){ toast('⚠ Enter a name and a positive point value.'); return; }
-    POS_CATEGORIES.push({id:uid('CAT'), name, pts, dir:'positive', noteRequired:false});
-    persistCategories();
-    logAudit('Category added', '"'+name+'" (+'+pts+' pts, Good Behavior)');
-    toast('✔ Added "'+name+'" to Good Behavior categories.');
-    render();
-  },
-  removePosCategory(id){
-    if(POS_CATEGORIES.length<=1){ toast('⚠ Keep at least one Good Behavior category.'); return; }
-    const removed = POS_CATEGORIES.find(c=>c.id===id);
-    POS_CATEGORIES = POS_CATEGORIES.filter(c=>c.id!==id);
-    persistCategories();
-    if(removed) logAudit('Category removed', '"'+removed.name+'" (Good Behavior)');
-    render();
-  },
-  editPosCategoryName(id){ state.editingItem = {type:'pos', id}; render(); },
-  cancelEditCategory(){ state.editingItem = null; render(); },
-  saveEditCategory(type, id, newName, newPts){
-    const list = type==='pos' ? POS_CATEGORIES : type==='neg' ? NEG_CATEGORIES : null;
-    const item = list ? list.find(x=>x.id===id) : null;
-    if(!item){ state.editingItem = null; render(); return; }
-    const trimmed = (newName||'').trim();
-    const pts = parseInt(newPts, 10);
-    if(!trimmed){ toast("⚠ Category name can't be empty."); return; }
-    if(isNaN(pts) || pts<=0){ toast('⚠ Enter a positive point value.'); return; }
-    const oldName = item.name, oldPts = item.pts;
-    item.name = trimmed;
-    item.pts = type==='neg' ? -Math.abs(pts) : pts;
-    persistCategories();
-    state.editingItem = null;
-    logAudit('Category edited', '"'+oldName+'" ('+oldPts+' pts) → "'+trimmed+'" ('+item.pts+' pts)');
-    toast('✔ Updated "'+trimmed+'".');
-    render();
-  },
-  addNegCategory(name, pts){
-    name=(name||'').trim(); pts=parseInt(pts,10);
-    if(!name || isNaN(pts) || pts<=0){ toast('⚠ Enter a name and a positive point value — it is automatically subtracted.'); return; }
-    NEG_CATEGORIES.push({id:uid('CAT'), name, pts:-Math.abs(pts), dir:'negative', noteRequired:true});
-    persistCategories();
-    logAudit('Category added', '"'+name+'" (-'+pts+' pts, Disciplinary)');
-    toast('✔ Added "'+name+'" to Disciplinary categories.');
-    render();
-  },
-  removeNegCategory(id){
-    if(NEG_CATEGORIES.length<=1){ toast('⚠ Keep at least one Disciplinary category.'); return; }
-    const removed = NEG_CATEGORIES.find(c=>c.id===id);
-    NEG_CATEGORIES = NEG_CATEGORIES.filter(c=>c.id!==id);
-    persistCategories();
-    if(removed) logAudit('Category removed', '"'+removed.name+'" (Disciplinary)');
-    render();
-  },
-  editNegCategoryName(id){ state.editingItem = {type:'neg', id}; render(); },
-  addReward(name, cost, cat){
-    name=(name||'').trim(); cost=parseInt(cost,10); cat=(cat||'General').trim() || 'General';
-    if(!name || isNaN(cost) || cost<=0){ toast('⚠ Enter a reward name and a positive point cost.'); return; }
-    REWARDS.push({id:uid('RWD'), name, cost, cat});
-    persistRewards();
-    logAudit('Reward added', '"'+name+'" ('+cost+' pts, '+cat+')');
-    toast('✔ Added "'+name+'" to the Rewards Catalog.');
-    render();
-  },
-  removeReward(id){
-    if(REWARDS.length<=1){ toast('⚠ Keep at least one reward in the catalog.'); return; }
-    const removed = REWARDS.find(r=>r.id===id);
-    REWARDS = REWARDS.filter(r=>r.id!==id);
-    persistRewards();
-    if(removed) logAudit('Reward removed', '"'+removed.name+'"');
-    render();
-  },
-  editRewardName(id){ state.editingItem = {type:'reward', id}; render(); },
-  saveEditReward(id, newName, newCost){
-    const item = REWARDS.find(x=>x.id===id);
-    if(!item){ state.editingItem = null; render(); return; }
-    const trimmed = (newName||'').trim();
-    const cost = parseInt(newCost, 10);
-    if(!trimmed){ toast("⚠ Reward name can't be empty."); return; }
-    if(isNaN(cost) || cost<=0){ toast('⚠ Enter a positive point cost.'); return; }
-    const oldName = item.name, oldCost = item.cost;
-    item.name = trimmed;
-    item.cost = cost;
-    persistRewards();
-    state.editingItem = null;
-    logAudit('Reward edited', '"'+oldName+'" ('+oldCost+' pts) → "'+trimmed+'" ('+cost+' pts)');
-    toast('✔ Updated "'+trimmed+'".');
-    render();
-  },
-  // --- Reports (Manage → Reports) ---
-  setReportFrom(v){ state.reportFrom = v || null; render(); },
-  setReportTo(v){ state.reportTo = v || null; render(); },
-  exportRoster(){
-    const rows = SCHOLARS.map(s=>({
-      'First Name': s.first,
-      'Last Name': s.last,
-      'Grade': s.grade,
-      'Homeroom': s.homeroom || '',
-      'House': houseById(s.houseId).name,
-      'Barcode ID': s.barcodeId || '',
-      'Student ID': s.studentId || '',
-      'Current Points': s.currentPoints,
-      'Lifetime Points': s.lifetimePoints,
-      'Reward Balance': s.rewardBalance,
-      'Status': s.status,
-      'Badges Earned': badgesFor(s).join(', '),
-      'Notes': s.notes || '',
-    }));
-    downloadXLSX(rows, 'Roster', 'GWCA_Roster_'+todayStamp()+'.xlsx');
-  },
-  exportTransactions(){
-    const filtered = filterTransactionsByReportRange(TRANSACTIONS).slice().sort((a,b)=>b.ts-a.ts);
-    const rows = filtered.map(t=>{
-      const s = SCHOLARS.find(x=>x.id===t.scholarId);
-      return {
-        'Date/Time': new Date(t.ts).toLocaleString(),
-        'Scholar': s ? fullName(s) : '(scholar no longer in roster)',
-        'House': s ? houseById(s.houseId).name : '',
-        'Category': t.category,
-        'Amount': t.amount,
-        'Staff Role': t.staffRole,
-        'Note': t.note || '',
-      };
-    });
-    const label = (state.reportFrom||state.reportTo) ? '_'+(state.reportFrom||'start')+'_to_'+(state.reportTo||'now') : '';
-    downloadXLSX(rows, 'Transactions', 'GWCA_Transactions'+label+'_'+todayStamp()+'.xlsx');
-  },
-  exportHouseStandings(){
-    const totals = houseTotals();
-    const rows = HOUSES.map(h=>{
-      const members = SCHOLARS.filter(s=>s.houseId===h.id);
-      return {
-        'House': h.name,
-        'Value': h.value,
-        'Scholars': members.length,
-        'Total Lifetime Points': totals[h.id],
-      };
-    });
-    downloadXLSX(rows, 'House Standings', 'GWCA_House_Standings_'+todayStamp()+'.xlsx');
-  },
-  exportBadges(){
-    const rows = SCHOLARS.filter(s=>badgesFor(s).length>0).map(s=>{
-      const b = badgesFor(s);
-      return {
-        'Scholar': fullName(s),
-        'House': houseById(s.houseId).name,
-        'Grade': s.grade,
-        'Lifetime Points': s.lifetimePoints,
-        'Badge Count': b.length,
-        'Badges Earned': b.join(', '),
-      };
-    }).sort((a,b)=>b['Lifetime Points']-a['Lifetime Points']);
-    downloadXLSX(rows, 'Badges', 'GWCA_Badges_'+todayStamp()+'.xlsx');
-  },
-  exportAuditLog(){
-    const rows = AUDIT_LOG.map(a=>({
-      'Date/Time': new Date(a.ts).toLocaleString(),
-      'Staff': a.staffName,
-      'Role': ROLE_LABELS[a.staffRole] || a.staffRole,
-      'Action': a.action,
-      'Details': a.details || '',
-    }));
-    downloadXLSX(rows, 'Audit Log', 'GWCA_Audit_Log_'+todayStamp()+'.xlsx');
-  },
-  // --- My Class (teacher-scoped report) ---
-  setDemoHomeroom(h){ state.demoHomeroom = h; render(); },
-  exportMyClass(){
-    const homeroom = FIREBASE_ENABLED
-      ? (state.staffProfile && state.staffProfile.homeroom)
-      : (state.demoHomeroom || distinctHomerooms()[0] || null);
-    if(!homeroom){ toast('⚠ No homeroom assigned.'); return; }
-    const myScholars = SCHOLARS.filter(s=>s.homeroom===homeroom && s.status==='active').slice().sort((a,b)=>b.currentPoints-a.currentPoints);
-    const rows = myScholars.map(s=>({
-      'Scholar': fullName(s),
-      'House': houseById(s.houseId).name,
-      'Current Points': s.currentPoints,
-      'Lifetime Points': s.lifetimePoints,
-      'Badges Earned': badgesFor(s).join(', '),
-    }));
-    downloadXLSX(rows, homeroom, 'GWCA_'+homeroom.replace(/[^a-z0-9]/gi,'_')+'_'+todayStamp()+'.xlsx');
-  },
-  // --- Competitions & Live Event Mode ---
-  enterLiveMode(){ state.liveEventMode = true; render(); },
-  exitLiveMode(){ state.liveEventMode = false; render(); },
-  openPrintPreview(){
-    state.printSections = {
-      pos: document.getElementById('printPos').checked,
-      neg: document.getElementById('printNeg').checked,
-      rewards: document.getElementById('printRewards').checked,
-    };
-    state.printMode = true;
-    render();
-  },
-  closePrintPreview(){ state.printMode = false; render(); },
-  setLiveEventName(v){ state.liveEventName = v; },
-  awardEventPoints(houseId, points, competitionName, note){
-    points = parseInt(points, 10);
-    if(!houseId || isNaN(points) || points===0){ toast('⚠ Enter a non-zero point value.'); return; }
-    const name = (competitionName||'').trim() || 'Live Event';
-    const award = {id:uid('EVT'), houseId, competitionName:name, points, note:(note||'').trim(), staffRole:state.role, ts:Date.now()};
-    if(FIREBASE_ENABLED){
-      db.collection('eventAwards').doc(award.id).set(award).catch(err=> toast('⚠ Sync error: '+err.message));
-    }
-    EVENT_AWARDS.unshift(award);
-    toast((points>0?'+':'')+points+' to '+houseById(houseId).name+(name!=='Live Event' ? ' — '+name : '')+'!');
-    checkForNotifications();
-    render();
-  },
-  awardEventPointsFromForm(){
-    const houseId = document.getElementById('compHouseSelect').value;
-    const points = document.getElementById('compPoints').value;
-    const name = document.getElementById('compEventName').value;
-    const note = document.getElementById('compNote').value;
-    App.awardEventPoints(houseId, points, name, note);
-    document.getElementById('compPoints').value='';
-    document.getElementById('compEventName').value='';
-    document.getElementById('compNote').value='';
-  },
-  // --- House Cup: terms, traditions calendar, champion ---
-  setSelectedTerm(id){ state.selectedTermId = id; render(); },
-  addCupTerm(name, from, to){
-    name=(name||'').trim();
-    if(!name){ toast('⚠ Enter a term name.'); return; }
-    HOUSE_CUP_TERMS.push({id:uid('TERM'), name, from: from||null, to: to||null});
-    persistCupTerms();
-    logAudit('House Cup term added', '"'+name+'" ('+(from||'…')+' → '+(to||'…')+')');
-    toast('✔ Added term "'+name+'".');
-    render();
-  },
-  removeCupTerm(id){
-    const removed = HOUSE_CUP_TERMS.find(t=>t.id===id);
-    HOUSE_CUP_TERMS = HOUSE_CUP_TERMS.filter(t=>t.id!==id);
-    if(state.selectedTermId===id) state.selectedTermId='all';
-    persistCupTerms();
-    if(removed) logAudit('House Cup term removed', '"'+removed.name+'"');
-    render();
-  },
-  addTradition(name, date, note){
-    name=(name||'').trim();
-    if(!name){ toast('⚠ Enter an event name.'); return; }
-    TRADITIONS.push({id:uid('TRAD'), name, date: date||null, note:(note||'').trim()});
-    persistTraditions();
-    logAudit('Tradition added', '"'+name+'"'+(date?' ('+date+')':''));
-    toast('✔ Added "'+name+'" to the traditions calendar.');
-    render();
-  },
-  removeTradition(id){
-    const removed = TRADITIONS.find(t=>t.id===id);
-    TRADITIONS = TRADITIONS.filter(t=>t.id!==id);
-    persistTraditions();
-    if(removed) logAudit('Tradition removed', '"'+removed.name+'"');
-    render();
-  },
-  declareCupChampion(){
-    const totals = houseTotals();
-    const leader = HOUSES.slice().sort((a,b)=>totals[b.id]-totals[a.id])[0];
-    CUP_CHAMPION = {houseId: leader.id, houseName: leader.name, points: totals[leader.id], declaredAt: Date.now()};
-    persistChampion();
-    logAudit('Cup Champion declared', leader.name+' ('+totals[leader.id]+' pts)');
-    toast('🏆 '+leader.name+' declared House Cup Champion!');
-    render();
-  },
-  clearCupChampion(){
-    const cleared = CUP_CHAMPION;
-    CUP_CHAMPION = null;
-    persistChampion();
-    if(cleared) logAudit('Cup Champion cleared', cleared.houseName);
-    render();
-  },
-  // --- Staff accounts (Manage tab, admin only, Firebase-enabled only) ---
-  generateStaffPassword(){
-    const el = document.getElementById('newStaffPassword');
-    if(el) el.value = Math.random().toString(36).slice(-8);
-  },
-  addStaffMember(){
-    const name = (document.getElementById('newStaffName').value || '').trim();
-    const email = (document.getElementById('newStaffEmail').value || '').trim();
-    const password = document.getElementById('newStaffPassword').value || '';
-    const role = document.getElementById('newStaffRole').value;
-    const canSubtract = document.getElementById('newStaffCanSubtract').checked;
-    const homeroom = document.getElementById('newStaffHomeroom').value || '';
-    if(!name || !email || !password){ toast('⚠ Enter a name, email, and temporary password.'); return; }
-    if(password.length < 6){ toast('⚠ Password needs at least 6 characters (Firebase requirement).'); return; }
-
-    toast('Creating account for '+name+'…');
-    // A secondary, throwaway Firebase connection creates the login so the admin's own
-    // session (the primary connection) is never touched — the client SDK would otherwise
-    // sign the admin OUT and into the new account the moment it's created.
-    const secondaryApp = firebase.initializeApp(firebaseConfig, 'StaffCreator_'+Date.now());
-    secondaryApp.auth().createUserWithEmailAndPassword(email, password)
-      .then(cred=>{
-        const uid = cred.user.uid;
-        return db.collection('staff').doc(uid).set({name, email, role, canSubtract, homeroom, createdAt:Date.now()});
-      })
-      .then(()=> secondaryApp.auth().signOut())
-      .then(()=>{
-        secondaryApp.delete();
-        toast('✔ Account created for '+name+'. Tell them their email and temporary password so they can sign in.');
-        logAudit('Staff account created', name+' ('+email+', '+(ROLE_LABELS[role]||role)+(homeroom?', '+homeroom:'')+')');
-        document.getElementById('newStaffName').value='';
-        document.getElementById('newStaffEmail').value='';
-        document.getElementById('newStaffPassword').value='';
-        render();
-      })
-      .catch(err=>{
-        secondaryApp.delete().catch(()=>{});
-        let msg = err.message;
-        if(err.code==='auth/email-already-in-use') msg = 'That email already has an account.';
-        if(err.code==='auth/weak-password') msg = 'Password is too weak — use at least 6 characters.';
-        if(err.code==='auth/invalid-email') msg = 'That email address looks invalid.';
-        toast('⚠ Could not create account: '+msg);
-      });
-  },
-  updateStaffRole(uid, newRole){
-    const person = STAFF_LIST.find(s=>s.id===uid);
-    db.collection('staff').doc(uid).update({role:newRole})
-      .then(()=>{
-        toast('✔ Role updated.');
-        logAudit('Staff role changed', (person?person.name:uid)+' → '+(ROLE_LABELS[newRole]||newRole));
-      })
-      .catch(err=> toast('⚠ Sync error: '+err.message));
-  },
-  updateStaffHomeroom(uid, homeroom){
-    const person = STAFF_LIST.find(s=>s.id===uid);
-    db.collection('staff').doc(uid).update({homeroom})
-      .then(()=>{
-        toast('✔ Homeroom updated.');
-        logAudit('Staff homeroom changed', (person?person.name:uid)+' → '+(homeroom||'(none)'));
-      })
-      .catch(err=> toast('⚠ Sync error: '+err.message));
-  },
-  toggleStaffCanSubtract(uid, checked){
-    const person = STAFF_LIST.find(s=>s.id===uid);
-    db.collection('staff').doc(uid).update({canSubtract:checked})
-      .then(()=>{
-        toast('✔ Updated.');
-        logAudit('Staff subtract permission changed', (person?person.name:uid)+' → '+(checked?'can subtract':'cannot subtract'));
-      })
-      .catch(err=> toast('⚠ Sync error: '+err.message));
-  },
-  removeStaffMember(uid, name){
-    STAFF_LIST = STAFF_LIST.filter(s=>s.id!==uid); // optimistic; the live listener will confirm it
-    db.collection('staff').doc(uid).delete()
-      .then(()=> toast('✔ Revoked access for '+name+'. (Their login still exists in Firebase — they just can\'t sign in to the app anymore.)'))
-      .catch(err=> toast('⚠ Sync error: '+err.message));
-    logAudit('Staff access revoked', name);
-    render();
-  },
-  // --- New School Year Reset (Manage tab, admin only) ---
-  previewYearReset(){
-    const label = (document.getElementById('yearResetLabel').value || '').trim();
-    if(!label){ toast('⚠ Enter a label for the year being archived (e.g. "2025–2026").'); return; }
-    state.yearResetPreview = buildYearArchiveSnapshot(label);
-    render();
-  },
-  cancelYearReset(){ state.yearResetPreview = null; render(); },
-  confirmYearReset(){
-    const typed = (document.getElementById('yearResetConfirmText').value || '').trim();
-    if(typed !== 'RESET'){ toast('⚠ Type RESET (all caps) in the box to confirm — this cannot be undone from within the app.'); return; }
-    const snapshot = state.yearResetPreview;
-    if(!snapshot) return;
-
-    // 1. Save the archive so this year's final standings/badges are never lost.
-    if(FIREBASE_ENABLED){
-      db.collection('yearArchives').doc(snapshot.id).set(snapshot).catch(err=> toast('⚠ Sync error saving archive: '+err.message));
-    }
-    YEAR_ARCHIVES.unshift(snapshot);
-
-    // 2. Reset every scholar's points for the new year.
-    if(FIREBASE_ENABLED){
-      commitInChunks(SCHOLARS, 450, (batch,s)=>{
-        batch.update(db.collection('scholars').doc(s.id), {currentPoints:0, lifetimePoints:0, rewardBalance:0});
-      }).catch(err=> toast('⚠ Sync error resetting scholars: '+err.message));
-    }
-    SCHOLARS.forEach(s=>{ s.currentPoints=0; s.lifetimePoints=0; s.rewardBalance=0; }); // optimistic, both modes
-
-    // 3. Clear house competition bonus points — already preserved inside the archive's houseTotals.
-    if(FIREBASE_ENABLED && EVENT_AWARDS.length){
-      commitInChunks(EVENT_AWARDS, 450, (batch,e)=>{
-        batch.delete(db.collection('eventAwards').doc(e.id));
-      }).catch(err=> toast('⚠ Sync error clearing event awards: '+err.message));
-    }
-    EVENT_AWARDS = [];
-
-    // 4. Clear the champion banner so the new year starts with a clean slate.
-    CUP_CHAMPION = null;
-    persistChampion();
-
-    // 5. Reset notification tracking so nothing spuriously re-fires under the new baseline.
-    BADGE_SEEN = {};
-    LAST_HOUSE_LEADER = null;
-    notificationsPrimed = false;
-
-    state.yearResetPreview = null;
-    logAudit('New school year reset', '"'+snapshot.label+'" archived ('+snapshot.scholarCount+' scholars, champion: '+(snapshot.champion?snapshot.champion.houseName:'none')+')');
-    toast('🎓 "'+snapshot.label+'" archived — all scholars reset to 0 points for the new year!');
-    render();
   },
   importRoster(file){
     if(!file) return;
@@ -2556,107 +1057,33 @@ window.App = {
         const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:null});
         const scholars = importRowsToScholars(rows);
         if(!scholars.length){ if(statusEl) statusEl.textContent='No recognizable scholar rows found in that file.'; return; }
+        if(!confirm('Import '+scholars.length+' scholars and replace the current roster of '+SCHOLARS.length+'? This cannot be undone.')){
+          if(statusEl) statusEl.textContent='Import cancelled.'; return;
+        }
         const missingBarcode = scholars.filter(s=>!s.barcodeId).length;
         const unsorted = scholars.filter(s=>!s.houseId).length;
-        // Show an inline confirmation panel instead of the browser's native confirm() dialog —
-        // confirm() gets silently blocked in some sandboxed preview contexts (same issue fixed
-        // earlier for prompt()), which would make bulk imports fail with no visible error.
-        state.pendingImport = {scholars, missingBarcode, unsorted, previousCount: SCHOLARS.length};
-        if(statusEl) statusEl.textContent = '';
-        render();
+        const summary = 'Imported '+scholars.length+' scholars ('+missingBarcode+' missing a barcode ID, '+unsorted+' not yet sorted into a House).';
+        if(FIREBASE_ENABLED){
+          if(statusEl) statusEl.textContent='Uploading to shared database…';
+          const chunks=[]; for(let i=0;i<scholars.length;i+=450) chunks.push(scholars.slice(i,i+450));
+          (async()=>{
+            for(const chunk of chunks){
+              const batch = db.batch();
+              chunk.forEach(s=> batch.set(db.collection('scholars').doc(s.id), s));
+              await batch.commit();
+            }
+            toast('✔ '+summary);
+          })().catch(err=>{ if(statusEl) statusEl.textContent='Import failed: '+err.message; });
+        } else {
+          SCHOLARS = scholars; TRANSACTIONS=[];
+          toast('✔ '+summary);
+          render();
+        }
       }catch(err){
         if(statusEl) statusEl.textContent='Could not read that file: '+err.message;
       }
     };
     reader.readAsArrayBuffer(file);
-  },
-  cancelRosterImport(){
-    state.pendingImport = null;
-    const statusEl = document.getElementById('importStatus');
-    if(statusEl) statusEl.textContent = 'Import cancelled.';
-    render();
-  },
-  confirmRosterImport(){
-    const pending = state.pendingImport;
-    if(!pending) return;
-    const {scholars, missingBarcode, unsorted, previousCount} = pending;
-    const summary = 'Imported '+scholars.length+' scholars ('+missingBarcode+' missing a barcode ID, '+unsorted+' not yet sorted into a House).';
-    state.pendingImport = null;
-    const statusEl = document.getElementById('importStatus');
-    if(FIREBASE_ENABLED){
-      if(statusEl) statusEl.textContent='Uploading to shared database…';
-      commitInChunks(scholars, 450, (batch,s)=> batch.set(db.collection('scholars').doc(s.id), s))
-        .then(()=>{
-          logAudit('Roster imported', scholars.length+' scholars (replaced previous roster of '+previousCount+')');
-          toast('✔ '+summary);
-        })
-        .catch(err=>{ if(statusEl) statusEl.textContent='Import failed: '+err.message; });
-    } else {
-      SCHOLARS = scholars; TRANSACTIONS=[];
-      logAudit('Roster imported', scholars.length+' scholars (replaced previous roster of '+previousCount+')');
-      toast('✔ '+summary);
-      render();
-    }
-  },
-  // --- External point import (ClassDojo or similar) ---
-  uploadExternalImportFile(file){
-    if(!file) return;
-    const reader = new FileReader();
-    reader.onload = (e)=>{
-      try{
-        const data = new Uint8Array(e.target.result);
-        const wb = XLSX.read(data, {type:'array'});
-        const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:''});
-        if(!rows.length){ toast('⚠ No rows found in that file.'); return; }
-        const headers = Object.keys(rows[0]);
-        // Best-guess auto-mapping from common header names — the admin can still correct any of these.
-        const guess = (patterns)=> headers.find(h=> patterns.some(p=> h.toLowerCase().includes(p))) || headers[0];
-        const mapping = {
-          nameCol: guess(['student','name','child']),
-          pointsCol: guess(['point','value','score']),
-          categoryCol: guess(['skill','category','behavior','reason']) || '',
-        };
-        state.externalImport = {stage:'mapping', headers, rows, mapping};
-        render();
-      }catch(err){
-        toast('⚠ Could not read that file: '+err.message);
-      }
-    };
-    reader.readAsArrayBuffer(file);
-  },
-  setExternalImportMapping(field, col){
-    if(!state.externalImport) return;
-    state.externalImport.mapping[field] = col;
-    render();
-  },
-  previewExternalImport(){
-    const imp = state.externalImport;
-    if(!imp) return;
-    if(!imp.mapping.nameCol || !imp.mapping.pointsCol){ toast('⚠ Pick at least a Name column and a Points column.'); return; }
-    const {matched, unmatched} = buildExternalImportPreview(imp.rows, imp.mapping);
-    imp.matched = matched;
-    imp.unmatched = unmatched;
-    imp.stage = 'preview';
-    render();
-  },
-  backToExternalImportMapping(){
-    if(!state.externalImport) return;
-    state.externalImport.stage = 'mapping';
-    render();
-  },
-  cancelExternalImport(){ state.externalImport = null; render(); },
-  confirmExternalImport(){
-    const imp = state.externalImport;
-    if(!imp || !imp.matched || !imp.matched.length) return;
-    imp.matched.forEach(entry=>{
-      const categoryObj = {name: entry.category};
-      applyTransaction(entry.scholar, categoryObj, entry.points, 'Imported from external point system');
-    });
-    const summary = imp.matched.length+' point'+(imp.matched.length===1?'':'s')+' entries imported for '+new Set(imp.matched.map(e=>e.scholar.id)).size+' scholars'+(imp.unmatched.length?', '+imp.unmatched.length+' unmatched name(s) skipped':'')+'.';
-    logAudit('External points imported', summary);
-    state.externalImport = null;
-    toast('✔ '+summary);
-    render();
   }
 };
 
@@ -2678,7 +1105,6 @@ document.addEventListener('visibilitychange',()=>{ if(document.hidden && camStre
 function startFirebaseSync(){
   const scholarsRef = db.collection('scholars');
   const txRef = db.collection('transactions').orderBy('ts','desc').limit(300);
-  const eventAwardsRef = db.collection('eventAwards').orderBy('ts','desc').limit(300);
 
   scholarsRef.get().then(snap=>{
     if(snap.empty){
@@ -2693,7 +1119,6 @@ function startFirebaseSync(){
       scholarsRef.onSnapshot(snap=>{
         SCHOLARS = snap.docs.map(d=>d.data());
         SYNC_READY = true;
-        checkForNotifications();
         render();
       }, err=> toast('⚠ Sync error: '+err.message));
 
@@ -2702,27 +1127,6 @@ function startFirebaseSync(){
         render();
       }, err=> toast('⚠ Sync error: '+err.message));
 
-      eventAwardsRef.onSnapshot(snap=>{
-        EVENT_AWARDS = snap.docs.map(d=>d.data());
-        checkForNotifications();
-        render();
-      }, err=> toast('⚠ Sync error: '+err.message));
-
-      db.collection('staff').onSnapshot(snap=>{
-        STAFF_LIST = snap.docs.map(d=>({id:d.id, ...d.data()}));
-        render();
-      }, ()=>{ /* only admins typically look at this list; a permission error here is harmless */ });
-
-      db.collection('yearArchives').orderBy('archivedAt','desc').limit(20).onSnapshot(snap=>{
-        YEAR_ARCHIVES = snap.docs.map(d=>d.data());
-        render();
-      }, ()=>{ /* fine if this doesn't exist yet — no years archived so far */ });
-
-      db.collection('auditLog').orderBy('ts','desc').limit(500).onSnapshot(snap=>{
-        AUDIT_LOG = snap.docs.map(d=>d.data());
-        render();
-      }, ()=>{ /* only admins look at this; fine if it doesn't exist yet or read fails */ });
-
       db.collection('settings').doc('houseImages').onSnapshot(doc=>{
         if(doc.exists){
           const data = doc.data();
@@ -2730,49 +1134,10 @@ function startFirebaseSync(){
           render();
         }
       }, ()=>{ /* settings doc may not exist yet — fine, houses just use default mascots */ });
-
-      db.collection('settings').doc('pointCategories').onSnapshot(doc=>{
-        if(doc.exists){
-          const data = doc.data();
-          if(Array.isArray(data.positive) && data.positive.length) POS_CATEGORIES = data.positive;
-          if(Array.isArray(data.negative) && data.negative.length) NEG_CATEGORIES = data.negative;
-          render();
-        }
-      }, ()=>{ /* doc may not exist yet — fine, built-in categories are used until an admin edits them */ });
-
-      db.collection('settings').doc('rewardsCatalog').onSnapshot(doc=>{
-        if(doc.exists){
-          const data = doc.data();
-          if(Array.isArray(data.items) && data.items.length) REWARDS = data.items;
-          render();
-        }
-      }, ()=>{ /* doc may not exist yet — fine, built-in rewards are used until an admin edits them */ });
-
-      db.collection('settings').doc('houseCupTerms').onSnapshot(doc=>{
-        if(doc.exists){
-          const data = doc.data();
-          if(Array.isArray(data.items)) HOUSE_CUP_TERMS = data.items;
-          render();
-        }
-      }, ()=>{ /* doc may not exist yet — fine, no terms defined means "All-Time" only */ });
-
-      db.collection('settings').doc('traditions').onSnapshot(doc=>{
-        if(doc.exists){
-          const data = doc.data();
-          if(Array.isArray(data.items)) TRADITIONS = data.items;
-          render();
-        }
-      }, ()=>{ /* doc may not exist yet — fine, calendar just starts empty */ });
-
-      db.collection('settings').doc('cupChampion').onSnapshot(doc=>{
-        CUP_CHAMPION = (doc.exists && doc.data().champion) ? doc.data().champion : null;
-        render();
-      }, ()=>{ /* doc may not exist yet — fine, no champion declared yet */ });
     });
 }
 
 /* ============================= STAFF LOGIN BOOTSTRAP ============================= */
-let firebaseSyncStarted = false; // guards against starting the data connections more than once (onAuthStateChanged can fire again later, e.g. on token refresh)
 function startAuthListener(){
   firebase.auth().onAuthStateChanged(user=>{
     state.authChecking = false;
@@ -2794,13 +1159,6 @@ function startAuthListener(){
       state.tab = state.role==='student' ? 'scan' : 'dashboard';
       state.authError = null;
       render();
-      // Only NOW that sign-in is fully confirmed do we open the dozen-or-so Firestore data
-      // connections (scholars, transactions, categories, etc.). Starting these any earlier — in
-      // parallel with the sign-in check, rather than after it — meant they'd all get rejected by
-      // security rules requiring request.auth != null, since that brief window before sign-in
-      // resolves has no confirmed auth yet. That produced a burst of "Missing or insufficient
-      // permissions" errors on every load, with no automatic retry once a listener failed.
-      if(!firebaseSyncStarted){ firebaseSyncStarted = true; startFirebaseSync(); }
     }).catch(err=>{
       state.authError = 'Could not load your staff profile: ' + err.message;
       firebase.auth().signOut();
@@ -2808,29 +1166,11 @@ function startAuthListener(){
   });
 }
 
-if(PUBLIC_DISPLAY_MODE){
-  render();
-  if(FIREBASE_ENABLED){
-    // Anonymous auth: no staff account needed, but still satisfies "request.auth != null" in the
-    // recommended Firestore/Storage security rules, so the display can read live data even once
-    // the database is locked down. Requires enabling Anonymous sign-in in the Firebase console
-    // (Authentication → Sign-in method) — see the README.
-    firebase.auth().signInAnonymously()
-      .then(()=> startFirebaseSync())
-      .catch(err=>{
-        toast('⚠ Public Display could not connect: '+err.message+' — enable Anonymous sign-in in the Firebase console.');
-        startFirebaseSync(); // still attempt it; will just show a sync error if rules block anonymous reads
-      });
-  }
-  setInterval(()=>{
-    state.publicDisplaySlide = (state.publicDisplaySlide + 1) % PUBLIC_DISPLAY_SLIDES.length;
-    render();
-  }, 12000);
-} else if(FIREBASE_ENABLED){
+if(FIREBASE_ENABLED){
   render(); // show "Checking sign-in status…" immediately
-  startAuthListener(); // startFirebaseSync() now runs from inside here, only once sign-in is confirmed
+  startAuthListener();
+  startFirebaseSync();
 } else {
-  checkForNotifications(); // silently seed badge/leader tracking so the first real change gets a toast
   render();
 }
 </script>
