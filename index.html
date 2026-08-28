@@ -237,6 +237,8 @@ const state = {
   houseCupParticipationHouse:'all',
   houseCupParticipationDivision:'all',
   houseCupParticipationSearch:'',
+  houseCupDivisionHouse:'all',
+  houseCupDivisionSearch:'',
   houseCupChampionshipLocked:false,
   houseCupChampionLocked:false,
   publicDisplaySlide:0,
@@ -752,7 +754,9 @@ let HOUSE_CUP_ROSTERS=loadHouseCupRosters();
 function saveHouseCupRosters(){try{localStorage.setItem('gwcaHouseCupRostersV1',JSON.stringify(HOUSE_CUP_ROSTERS))}catch(e){}}
 function hcDivisionForScholar(s){
  const g=String(s.grade||'').trim().toUpperCase();
- if(['K','KG','PK','PRE-K','PREK','KINDERGARTEN'].includes(g))return 'K–2';
+ if(!g)return '';
+ // Treat KA, KB, KG, KINDERGARTEN and Pre-K labels as the K–2 division.
+ if(g==='K'||g==='KG'||g.startsWith('K')||g==='PK'||g.startsWith('PRE-K')||g.startsWith('PREK')||g.startsWith('KINDER'))return 'K–2';
  const n=parseInt(g.replace(/[^0-9]/g,''),10);if(isNaN(n))return '';
  return n<=2?'K–2':n<=5?'3–5':'6–8';
 }
@@ -815,7 +819,7 @@ function viewHouseCupPoints(){
       <div class="chip-row">
         <button class="chip" onclick="App.hcSection('overview')">Overview</button>
         <button class="chip" onclick="App.hcSection('schedule')">Schedule</button>
-        <button class="chip" onclick="App.hcSection('rosters')">Rosters</button>
+        <button class="chip" onclick="App.hcSection('rosters')">Rosters</button><button class="chip ${state.houseCupSection==='divisions'?'selected':''}" onclick="App.hcSection('divisions')">Divisions</button>
         <button class="chip selected">Points</button><button class="chip" onclick="App.hcSection('participation')">Participation</button>
       </div>
     </div>
@@ -979,7 +983,7 @@ function viewHouseCupChampionship(){
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
       <div><h2 style="margin-bottom:4px">🏆 Championship / Field Day Mode</h2>
       <div class="subtle">Lock the regular season, run Field Day, and finalize the House Cup Champion.</div></div>
-      <div class="chip-row"><button class="chip" onclick="App.hcSection('overview')">Overview</button><button class="chip" onclick="App.hcSection('schedule')">Schedule</button><button class="chip" onclick="App.hcSection('rosters')">Rosters</button><button class="chip" onclick="App.hcSection('results')">Results</button><button class="chip" onclick="App.hcSection('points')">Points</button><button class="chip" onclick="App.hcSection('participation')">Participation</button><button class="chip selected">Championship</button></div>
+      <div class="chip-row"><button class="chip" onclick="App.hcSection('overview')">Overview</button><button class="chip" onclick="App.hcSection('schedule')">Schedule</button><button class="chip" onclick="App.hcSection('rosters')">Rosters</button><button class="chip ${state.houseCupSection==='divisions'?'selected':''}" onclick="App.hcSection('divisions')">Divisions</button><button class="chip" onclick="App.hcSection('results')">Results</button><button class="chip" onclick="App.hcSection('points')">Points</button><button class="chip" onclick="App.hcSection('participation')">Participation</button><button class="chip selected">Championship</button></div>
     </div></div>
 
     <div class="grid grid-2" style="margin-bottom:14px">
@@ -1047,6 +1051,121 @@ function viewHouseCupChampionship(){
     </div>`;
 }
 
+
+function viewHouseCupDivisions(){
+  const divisions=['K–2','3–5','6–8'];
+  const q=String(state.houseCupDivisionSearch||'').trim().toLowerCase();
+  const active=SCHOLARS.filter(s=>s.status==='active' && fullName(s).trim());
+  const assigned=active.filter(s=>HOUSES.some(h=>h.id===s.houseId));
+  const unassigned=active.filter(s=>!HOUSES.some(h=>h.id===s.houseId));
+  const houses=state.houseCupDivisionHouse==='all'
+    ? HOUSES
+    : HOUSES.filter(h=>h.id===state.houseCupDivisionHouse);
+
+  const divisionTotals={};
+  divisions.forEach(d=>divisionTotals[d]=assigned.filter(s=>hcDivisionForScholar(s)===d).length);
+
+  const rosterRows=(hid,div)=>assigned
+    .filter(s=>s.houseId===hid && hcDivisionForScholar(s)===div)
+    .filter(s=>!q || fullName(s).toLowerCase().includes(q) || String(s.grade||'').toLowerCase().includes(q) || String(s.homeroom||'').toLowerCase().includes(q))
+    .sort((a,b)=>{
+      const ga=String(a.grade||''), gb=String(b.grade||'');
+      return ga.localeCompare(gb,undefined,{numeric:true}) || fullName(a).localeCompare(fullName(b));
+    });
+
+  return `<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+      <div>
+        <h2 style="margin-bottom:4px">🏠 House Divisions</h2>
+        <div class="subtle">Each House is automatically separated into K–2, 3–5, and 6–8 using the current scholar roster.</div>
+      </div>
+      <div class="chip-row">
+        <button class="chip" onclick="App.hcSection('overview')">Overview</button>
+        <button class="chip" onclick="App.hcSection('schedule')">Schedule</button>
+        <button class="chip" onclick="App.hcSection('rosters')">Rosters</button>
+        <button class="chip selected">Divisions</button>
+        <button class="chip" onclick="App.hcSection('results')">Results</button>
+        <button class="chip" onclick="App.hcSection('points')">Points</button>
+        <button class="chip" onclick="App.hcSection('participation')">Participation</button>
+        <button class="chip" onclick="App.hcSection('championship')">Championship</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-4" style="margin-bottom:14px">
+    <div class="stat"><div class="num">${assigned.length}</div><div class="lbl">House Scholars</div></div>
+    <div class="stat"><div class="num">${divisionTotals['K–2']}</div><div class="lbl">K–2 Scholars</div></div>
+    <div class="stat"><div class="num">${divisionTotals['3–5']}</div><div class="lbl">3–5 Scholars</div></div>
+    <div class="stat"><div class="num">${divisionTotals['6–8']}</div><div class="lbl">6–8 Scholars</div></div>
+  </div>
+
+  <div class="card">
+    <div class="grid grid-2">
+      <label><strong>House</strong>
+        <select onchange="App.hcDivisionHouse(this.value)" style="width:100%;padding:9px;margin-top:5px">
+          <option value="all">All Five Houses</option>
+          ${HOUSES.map(h=>`<option value="${h.id}" ${state.houseCupDivisionHouse===h.id?'selected':''}>${h.name}</option>`).join('')}
+        </select>
+      </label>
+      <label><strong>Search Scholar / Grade / Teacher</strong>
+        <input type="text" value="${hcEsc(state.houseCupDivisionSearch||'')}" oninput="App.hcDivisionSearch(this.value)" placeholder="Start typing…" style="width:100%;padding:9px;margin-top:5px">
+      </label>
+    </div>
+    ${unassigned.length?`<div style="margin-top:12px;background:#FFF7F1;border:1px solid #F6D0B7;border-radius:10px;padding:10px 12px;font-size:12px"><strong>⚠ ${unassigned.length} active scholar${unassigned.length===1?'':'s'} not assigned to a House.</strong> They will appear here automatically after a House assignment is added.</div>`:''}
+  </div>
+
+  ${houses.map(h=>{
+    const counts={};
+    divisions.forEach(d=>counts[d]=assigned.filter(s=>s.houseId===h.id&&hcDivisionForScholar(s)===d).length);
+    const total=counts['K–2']+counts['3–5']+counts['6–8'];
+    return `<div class="card" style="border-top:5px solid ${h.color}">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+        <div>
+          <h2 style="margin:0"><span class="badge-dot" style="background:${h.color}"></span>${h.name}</h2>
+          <div class="subtle">${h.value} • ${total} scholars assigned to a House Cup division</div>
+        </div>
+        <div class="chip-row">
+          <span class="chip">K–2: <strong>${counts['K–2']}</strong></span>
+          <span class="chip">3–5: <strong>${counts['3–5']}</strong></span>
+          <span class="chip">6–8: <strong>${counts['6–8']}</strong></span>
+        </div>
+      </div>
+
+      <div class="grid grid-3" style="align-items:start">
+        ${divisions.map(div=>{
+          const rows=rosterRows(h.id,div);
+          const allCount=counts[div];
+          return `<div style="border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff">
+            <div style="padding:11px 12px;background:${h.color};color:#fff;display:flex;justify-content:space-between;gap:8px;align-items:center">
+              <strong>${div} Division</strong>
+              <span style="font-size:12px;font-weight:800">${allCount} Scholar${allCount===1?'':'s'}</span>
+            </div>
+            ${rows.length?`
+              <div style="max-height:460px;overflow:auto">
+                <table style="margin:0">
+                  <thead><tr><th>Scholar</th><th>Grade</th><th>Teacher</th></tr></thead>
+                  <tbody>${rows.map(sc=>`<tr>
+                    <td><strong>${hcEsc(fullName(sc))}</strong></td>
+                    <td>${hcEsc(sc.grade||'—')}</td>
+                    <td>${hcEsc(sc.homeroom||'—')}</td>
+                  </tr>`).join('')}</tbody>
+                </table>
+              </div>`:
+              `<div class="empty" style="margin:10px">${q?'No matching scholars.':'No scholars in this division.'}</div>`}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }).join('')}
+
+  <div class="card">
+    <h2>ℹ️ How This Tab Works</h2>
+    <div class="subtle" style="line-height:1.7">
+      This is a live view of the current roster — there is no second roster to maintain. When a scholar's grade or House assignment changes in the main roster, the scholar automatically moves to the correct House Cup division here. KA/KB and other Kindergarten labels are included in K–2.
+    </div>
+  </div>`;
+}
+
 function viewHouseCupParticipation(){
   const allRows=hcParticipationRows();
   const summary=hcParticipationSummary();
@@ -1077,7 +1196,7 @@ function viewHouseCupParticipation(){
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
       <div><h2 style="margin-bottom:4px">👥 House Cup Participation</h2>
       <div class="subtle">Track who has represented each House and help spread opportunities across the Pride.</div></div>
-      <div class="chip-row"><button class="chip" onclick="App.hcSection('overview')">Overview</button><button class="chip" onclick="App.hcSection('schedule')">Schedule</button><button class="chip" onclick="App.hcSection('rosters')">Rosters</button><button class="chip" onclick="App.hcSection('results')">Results</button><button class="chip" onclick="App.hcSection('points')">Points</button><button class="chip selected">Participation</button><button class="chip" onclick="App.hcSection('championship')">Championship</button></div>
+      <div class="chip-row"><button class="chip" onclick="App.hcSection('overview')">Overview</button><button class="chip" onclick="App.hcSection('schedule')">Schedule</button><button class="chip" onclick="App.hcSection('rosters')">Rosters</button><button class="chip ${state.houseCupSection==='divisions'?'selected':''}" onclick="App.hcSection('divisions')">Divisions</button><button class="chip" onclick="App.hcSection('results')">Results</button><button class="chip" onclick="App.hcSection('points')">Points</button><button class="chip selected">Participation</button><button class="chip" onclick="App.hcSection('championship')">Championship</button></div>
     </div></div>
 
     <div class="grid grid-3" style="margin-bottom:14px">
@@ -1138,7 +1257,7 @@ function viewHouseCupResults(){
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
       <div><h2 style="margin-bottom:4px">🧾 Results & Automatic Scoring</h2>
       <div class="subtle">Enter finishing order. House Cup points are calculated separately from regular scholar/House points.</div></div>
-      <div class="chip-row"><button class="chip" onclick="App.hcSection('overview')">Overview</button><button class="chip" onclick="App.hcSection('schedule')">Schedule</button><button class="chip" onclick="App.hcSection('rosters')">Rosters</button><button class="chip selected">Results</button><button class="chip" onclick="App.hcSection('points')">Points</button></div>
+      <div class="chip-row"><button class="chip" onclick="App.hcSection('overview')">Overview</button><button class="chip" onclick="App.hcSection('schedule')">Schedule</button><button class="chip" onclick="App.hcSection('rosters')">Rosters</button><button class="chip ${state.houseCupSection==='divisions'?'selected':''}" onclick="App.hcSection('divisions')">Divisions</button><button class="chip selected">Results</button><button class="chip" onclick="App.hcSection('points')">Points</button></div>
     </div></div>
     ${!ev?'<div class="card"><div class="empty">Add an event to the Schedule first.</div></div>':`
     <div class="card"><div class="grid grid-2">
@@ -1219,6 +1338,7 @@ function renderHouseCupEventModal(){
 function viewHouseCup(){
   if(state.houseCupSection==='schedule') return viewHouseCupSchedule();
   if(state.houseCupSection==='rosters') return viewHouseCupRosters();
+  if(state.houseCupSection==='divisions') return viewHouseCupDivisions();
   if(state.houseCupSection==='results') return viewHouseCupResults();
   if(state.houseCupSection==='points') return viewHouseCupPoints();
   if(state.houseCupSection==='participation') return viewHouseCupParticipation();
@@ -1771,6 +1891,8 @@ window.App = {
     HOUSE_CUP_CHAMPIONSHIP.finalChampionLocked=false;
     saveHouseCupChampionshipState();toast('🔓 Final championship reopened.');render();
   },
+  hcDivisionHouse(v){state.houseCupDivisionHouse=v;render();},
+  hcDivisionSearch(v){state.houseCupDivisionSearch=v;render();},
   hcParticipationHouse(v){state.houseCupParticipationHouse=v;render();},
   hcParticipationDivision(v){state.houseCupParticipationDivision=v;render();},
   hcParticipationSearch(v){state.houseCupParticipationSearch=v;render();},
