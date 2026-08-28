@@ -1597,7 +1597,7 @@ function viewManage(){
 
   <div class="card">
     <h2>Import Roster (CSV or Excel)</h2>
-    <p class="subtle">Upload an updated roster any time (e.g. a refreshed <code>Master_Carver_Roster</code> file). Matches columns named: Barcode ID, Student ID, First Name, Last Name, Grade, House, Teacher Name, Current Points, Lifetime Points, Store Rewards Balance, Parent Name, Parent Email, Parent Phone, Status, Notes. <strong>This replaces the current roster.</strong></p>
+    <p class="subtle">Upload an updated roster any time (e.g. a refreshed <code>Master_Carver_Roster</code> file). Matches columns named: Barcode ID, Student ID, First Name, Last Name, Grade, House, Teacher Name, Current Points, Lifetime Points, Store Rewards Balance, Parent Name, Parent Email, Parent Phone, Status, Notes. <strong>This replaces the entire current roster. Any scholar not in the uploaded file will be removed from the shared roster.</strong></p>
     <input type="file" id="rosterFile" accept=".csv,.xlsx,.xls" onchange="App.importRoster(this.files[0])">
     <div id="importStatus" class="subtle" style="margin-top:8px;"></div>
   </div>
@@ -1969,16 +1969,33 @@ window.App = {
         const unsorted = scholars.filter(s=>!s.houseId).length;
         const summary = 'Imported '+scholars.length+' scholars ('+missingBarcode+' missing a barcode ID, '+unsorted+' not yet sorted into a House).';
         if(FIREBASE_ENABLED){
-          if(statusEl) statusEl.textContent='Uploading to shared database…';
-          const chunks=[]; for(let i=0;i<scholars.length;i+=450) chunks.push(scholars.slice(i,i+450));
+          if(statusEl) statusEl.textContent='Replacing shared roster…';
           (async()=>{
-            for(const chunk of chunks){
+            const scholarsRef = db.collection('scholars');
+
+            // The uploaded roster is the single source of truth:
+            // remove every existing scholar document first so old students
+            // cannot remain in Firebase and inflate the scholar count.
+            const existing = await scholarsRef.get();
+            const deleteDocs = existing.docs;
+            for(let i=0;i<deleteDocs.length;i+=400){
               const batch = db.batch();
-              chunk.forEach(s=> batch.set(db.collection('scholars').doc(s.id), s));
+              deleteDocs.slice(i,i+400).forEach(doc=>batch.delete(doc.ref));
               await batch.commit();
             }
-            toast('✔ '+summary);
-          })().catch(err=>{ if(statusEl) statusEl.textContent='Import failed: '+err.message; });
+
+            // Upload only the scholars from the newly approved roster.
+            for(let i=0;i<scholars.length;i+=400){
+              const batch = db.batch();
+              scholars.slice(i,i+400).forEach(sc=>batch.set(scholarsRef.doc(sc.id), sc));
+              await batch.commit();
+            }
+
+            if(statusEl) statusEl.textContent=summary+' This roster is now the only active roster in the system.';
+            toast('✔ '+summary+' Old roster records removed.');
+          })().catch(err=>{
+            if(statusEl) statusEl.textContent='Import failed: '+err.message;
+          });
         } else {
           SCHOLARS = scholars; TRANSACTIONS=[];
           toast('✔ '+summary);
