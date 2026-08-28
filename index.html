@@ -1595,6 +1595,18 @@ function viewManage(){
     </div>
   </div>
 
+  <div class="card" style="border:2px solid #C0392B;">
+    <h2 style="color:#C0392B;">Reset Scholar Points & History</h2>
+    <p class="subtle">
+      Admin only. This keeps the scholar roster, House assignments, and profile information,
+      but resets every scholar's <strong>Current Points</strong>, <strong>Lifetime Points</strong>,
+      and <strong>Store Rewards Balance</strong> to 0 and clears the point transaction history.
+    </p>
+    <button class="btn" style="background:#C0392B;color:#fff;" onclick="App.resetAllScholarPointsAndHistory()">
+      ⚠ Reset All Scholar Points & History
+    </button>
+  </div>
+
   <div class="card">
     <h2>Import Roster (CSV or Excel)</h2>
     <p class="subtle">Upload an updated roster any time (e.g. a refreshed <code>Master_Carver_Roster</code> file). Matches columns named: Barcode ID, Student ID, First Name, Last Name, Grade, House, Teacher Name, Current Points, Lifetime Points, Store Rewards Balance, Parent Name, Parent Email, Parent Phone, Status, Notes. <strong>This replaces the entire current roster. Any scholar not in the uploaded file will be removed from the shared roster.</strong></p>
@@ -1950,6 +1962,81 @@ window.App = {
     };
     reader.readAsDataURL(file);
   },
+  resetAllScholarPointsAndHistory(){
+    if(!isAdmin()){
+      toast('⚠ Admin access required.');
+      return;
+    }
+
+    const first = confirm(
+      'RESET ALL SCHOLAR POINTS & HISTORY?\n\n' +
+      'This will set Current Points, Lifetime Points, and Store Rewards Balance to 0 for every scholar, ' +
+      'and clear all point transaction history.\n\n' +
+      'The scholar roster itself will NOT be deleted.'
+    );
+    if(!first) return;
+
+    const typed = prompt('Type RESET to confirm this action:');
+    if(String(typed||'').trim().toUpperCase()!=='RESET'){
+      toast('Reset cancelled.');
+      return;
+    }
+
+    const runReset = async()=>{
+      if(FIREBASE_ENABLED){
+        const scholarsRef = db.collection('scholars');
+        const txRef = db.collection('transactions');
+
+        const scholarSnap = await scholarsRef.get();
+        for(let i=0;i<scholarSnap.docs.length;i+=400){
+          const batch = db.batch();
+          scholarSnap.docs.slice(i,i+400).forEach(doc=>{
+            batch.update(doc.ref,{
+              currentPoints:0,
+              lifetimePoints:0,
+              rewardBalance:0
+            });
+          });
+          await batch.commit();
+        }
+
+        const txSnap = await txRef.get();
+        for(let i=0;i<txSnap.docs.length;i+=400){
+          const batch = db.batch();
+          txSnap.docs.slice(i,i+400).forEach(doc=>batch.delete(doc.ref));
+          await batch.commit();
+        }
+
+        // Also clear local copies immediately while Firestore listeners refresh.
+        SCHOLARS = SCHOLARS.map(sc=>({
+          ...sc,
+          currentPoints:0,
+          lifetimePoints:0,
+          rewardBalance:0
+        }));
+        TRANSACTIONS = [];
+      } else {
+        SCHOLARS = SCHOLARS.map(sc=>({
+          ...sc,
+          currentPoints:0,
+          lifetimePoints:0,
+          rewardBalance:0
+        }));
+        TRANSACTIONS = [];
+      }
+
+      BADGE_SEEN = {};
+      LAST_HOUSE_LEADER = null;
+      notificationsPrimed = false;
+      toast('✔ All scholar points and point history have been reset.');
+      render();
+    };
+
+    runReset().catch(err=>{
+      toast('⚠ Reset failed: '+err.message);
+    });
+  },
+
   importRoster(file){
     if(!file) return;
     const statusEl = document.getElementById('importStatus');
