@@ -207,6 +207,10 @@ function buildSeedScholars(){
   return JSON.parse(JSON.stringify(IMPORTED_ROSTER));
 }
 let SCHOLARS = FIREBASE_ENABLED ? [] : buildSeedScholars();
+let STUDENT_PHOTOS = {};
+if(!FIREBASE_ENABLED){
+  try{ STUDENT_PHOTOS = JSON.parse(localStorage.getItem('gwcaStudentPhotosByIdV1')||'{}'); }catch(e){ STUDENT_PHOTOS={}; }
+}
 let TRANSACTIONS=[]; // {id,scholarId,houseId,amount,dir,category,staffRole,note,ts}
 let REDEMPTIONS=[];
 let SYNC_READY = !FIREBASE_ENABLED;
@@ -261,6 +265,39 @@ const state = {
 
 function uid(p){return p+Math.random().toString(36).slice(2,9);}
 function fullName(s,short){ return short ? s.first+' '+s.last[0]+'.' : s.first+' '+s.last; }
+function studentPhotoId(v){ return String(v==null?'':v).trim(); }
+function studentPhotoDocKey(v){ return studentPhotoId(v).replace(/\//g,'_'); }
+function studentPhotoUrl(s){
+  const sid=studentPhotoId(s&&s.studentId);
+  return sid && STUDENT_PHOTOS[sid] ? (STUDENT_PHOTOS[sid].url||STUDENT_PHOTOS[sid]) : '';
+}
+function scholarAvatar(s,size=52){
+  const h=houseById(s.houseId), url=studentPhotoUrl(s);
+  if(url) return `<div class="avatar" style="background:${h.color};width:${size}px;height:${size}px;overflow:hidden;padding:0;flex-shrink:0;"><img src="${url}" alt="${hcEsc(fullName(s))}" style="width:100%;height:100%;object-fit:cover;display:block;"></div>`;
+  return `<div class="avatar" style="background:${h.color};width:${size}px;height:${size}px;flex-shrink:0;">${scholarInitials(s)}</div>`;
+}
+function saveLocalStudentPhotos(){
+  try{ localStorage.setItem('gwcaStudentPhotosByIdV1',JSON.stringify(STUDENT_PHOTOS)); }catch(e){}
+}
+function resizeStudentPhoto(file,maxSize=700,quality=.86){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onerror=()=>reject(new Error('Could not read image file.'));
+    reader.onload=()=>{
+      const img=new Image();
+      img.onerror=()=>reject(new Error('That image could not be opened.'));
+      img.onload=()=>{
+        const scale=Math.min(1,maxSize/Math.max(img.width,img.height));
+        const w=Math.max(1,Math.round(img.width*scale)), h=Math.max(1,Math.round(img.height*scale));
+        const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+        const ctx=cv.getContext('2d'); ctx.drawImage(img,0,0,w,h);
+        cv.toBlob(blob=>blob?resolve(blob):reject(new Error('Could not prepare image.')),'image/jpeg',quality);
+      };
+      img.src=reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
 function scholarInitials(s){return (s.first[0]+s.last[0]).toUpperCase();}
 function toast(msg){ state.toast=msg; render(); setTimeout(()=>{state.toast=null; render();},2200); }
 
@@ -552,7 +589,7 @@ function scholarRow(s, onClick){
   const h=houseById(s.houseId);
   return `<div class="card" style="cursor:pointer;margin-bottom:10px;" onclick="${onClick}">
     <div class="scholar-card">
-      <div class="avatar" style="background:${h.color}">${scholarInitials(s)}</div>
+      ${scholarAvatar(s,52)}
       <div style="flex:1">
         <div style="font-weight:700;">${fullName(s)}</div>
         <div class="subtle">Grade ${s.grade} · ${s.homeroom||'—'} · ${s.studentId||'No ID yet'}</div>
@@ -1145,7 +1182,7 @@ function viewHouseCupDivisions(){
                 <table style="margin:0">
                   <thead><tr><th>Scholar</th><th>Grade</th><th>Teacher</th></tr></thead>
                   <tbody>${rows.map(sc=>`<tr>
-                    <td><strong>${hcEsc(fullName(sc))}</strong></td>
+                    <td><div style="display:flex;align-items:center;gap:7px">${studentPhotoUrl(sc)?`<img src="${studentPhotoUrl(sc)}" style="width:30px;height:30px;border-radius:50%;object-fit:cover;flex-shrink:0">`:''}<strong>${hcEsc(fullName(sc))}</strong></div></td>
                     <td>${hcEsc(sc.grade||'—')}</td>
                     <td>${hcEsc(sc.homeroom||'—')}</td>
                   </tr>`).join('')}</tbody>
@@ -1466,11 +1503,20 @@ function renderScholarPanel(){
   return `
   <div class="card" style="border-top:5px solid ${h.color}">
     <div class="scholar-card" style="margin-bottom:10px;">
-      <div class="avatar" style="background:${h.color};width:76px;height:76px;font-size:26px;">${scholarInitials(s)}</div>
+      ${scholarAvatar(s,76)}
       <div style="flex:1">
         <h2 style="margin:0;">${fullName(s)}</h2>
         <div class="subtle">${s.studentId||'No student ID yet'} · Grade ${s.grade} · ${s.homeroom||'—'}</div>
         <div style="margin-top:6px;">${houseChip(h)}</div>
+        ${state.role==='admin' ? (s.studentId ? `
+          <div style="margin-top:9px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <label class="btn btn-outline" style="margin:0;cursor:pointer;padding:7px 10px;font-size:12px;">
+              📷 ${studentPhotoUrl(s)?'Change':'Add'} Photo
+              <input type="file" accept="image/*" style="display:none" onchange="App.uploadScholarPhoto('${s.id}',this.files[0]);this.value=''">
+            </label>
+            ${studentPhotoUrl(s)?`<button class="btn btn-outline" style="padding:7px 10px;font-size:12px" onclick="App.removeScholarPhoto('${s.id}')">Remove Photo</button>`:''}
+            <span class="subtle">Matched by Student ID: <strong>${hcEsc(s.studentId)}</strong></span>
+          </div>` : `<div class="subtle" style="margin-top:8px;color:#A33;">Add a Student ID before uploading a photo.</div>`) : ''}
       </div>
     </div>
     <div class="grid grid-3" style="margin-bottom:12px;">
@@ -1729,8 +1775,33 @@ function viewManage(){
   </div>
 
   <div class="card">
+    <h2>📷 Student Photo Management</h2>
+    <p class="subtle">
+      Student photos are matched by <strong>Student ID</strong> and stored separately from the roster.
+      This means a roster replacement will not erase the photo as long as the same Student ID remains.
+    </p>
+    <div class="grid grid-3" style="margin-bottom:12px">
+      ${statCard(SCHOLARS.filter(sc=>studentPhotoId(sc.studentId)).length,'Scholars with Student IDs')}
+      ${statCard(SCHOLARS.filter(sc=>studentPhotoUrl(sc)).length,'Photos Matched to Roster')}
+      ${statCard(SCHOLARS.filter(sc=>studentPhotoId(sc.studentId)&&!studentPhotoUrl(sc)).length,'Still Need Photos')}
+    </div>
+    <div style="background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px">
+      <strong>Bulk Photo Upload</strong>
+      <div class="subtle" style="margin:5px 0 10px">
+        Name each image file with the scholar's Student ID — for example:
+        <code>12345.jpg</code>, <code>12346.png</code>. Select all of the photos at once and the system will match them automatically.
+      </div>
+      <input type="file" id="studentPhotoFiles" accept="image/*" multiple onchange="App.bulkUploadStudentPhotos(this.files)">
+      <div id="photoUploadStatus" class="subtle" style="margin-top:8px"></div>
+    </div>
+    <p class="subtle" style="margin-bottom:0">
+      You can also upload or replace one scholar's photo directly from the scholar profile.
+    </p>
+  </div>
+
+  <div class="card">
     <h2>Import Roster (CSV or Excel)</h2>
-    <p class="subtle">Upload an updated roster any time (e.g. a refreshed <code>Master_Carver_Roster</code> file). Matches columns named: Barcode ID, Student ID, First Name, Last Name, Grade, House, Teacher Name, Current Points, Lifetime Points, Store Rewards Balance, Parent Name, Parent Email, Parent Phone, Status, Notes. <strong>This replaces the entire current roster. Any scholar not in the uploaded file will be removed from the shared roster.</strong></p>
+    <p class="subtle">Upload an updated roster any time (e.g. a refreshed <code>Master_Carver_Roster</code> file). Matches columns named: Barcode ID, Student ID, First Name, Last Name, Grade, House, Teacher Name, Current Points, Lifetime Points, Store Rewards Balance, Parent Name, Parent Email, Parent Phone, Status, Notes. <strong>This replaces the entire current roster. Any scholar not in the uploaded file will be removed from the shared roster. Student photos are stored separately and will automatically reconnect when the same Student ID appears in the new roster.</strong></p>
     <input type="file" id="rosterFile" accept=".csv,.xlsx,.xls" onchange="App.importRoster(this.files[0])">
     <div id="importStatus" class="subtle" style="margin-top:8px;"></div>
   </div>
@@ -1744,8 +1815,8 @@ function viewManage(){
     </div>
     <p class="subtle">Full inline add/edit/archive ships with the production build (see BLUEPRINT.md). Below is the live roster.</p>
     <input id="searchQueryInput" type="text" placeholder="Filter roster…" value="${state.searchQuery}" oninput="App.setSearchQuery(this.value)" style="margin-bottom:10px;">
-    <table><thead><tr><th>Scholar</th><th>Grade</th><th>House</th><th>Barcode</th><th>Status</th><th>Points</th></tr></thead><tbody>
-      ${(state.searchQuery?searchScholars(state.searchQuery):SCHOLARS.slice(0,60)).map(s=>`<tr style="cursor:pointer;" onclick="App.openScholarModal('${s.id}')"><td>${fullName(s)}</td><td>${s.grade}</td><td>${houseChip(houseById(s.houseId))}</td><td>${s.barcodeId||'<span class="pill-neg">none</span>'}</td><td>${s.status}</td><td>${s.currentPoints}</td></tr>`).join('')}
+    <table><thead><tr><th>Photo</th><th>Scholar</th><th>Student ID</th><th>Grade</th><th>House</th><th>Status</th><th>Points</th></tr></thead><tbody>
+      ${(state.searchQuery?searchScholars(state.searchQuery):SCHOLARS.slice(0,60)).map(s=>`<tr style="cursor:pointer;" onclick="App.openScholarModal('${s.id}')"><td>${studentPhotoUrl(s)?`<img src="${studentPhotoUrl(s)}" style="width:34px;height:34px;border-radius:50%;object-fit:cover">`:'<span class="subtle">—</span>'}</td><td>${fullName(s)}</td><td>${s.studentId||'<span class="pill-neg">none</span>'}</td><td>${s.grade}</td><td>${houseChip(houseById(s.houseId))}</td><td>${s.status}</td><td>${s.currentPoints}</td></tr>`).join('')}
     </tbody></table>
     ${!state.searchQuery && SCHOLARS.length>60?`<div class="subtle" style="margin-top:8px;">Showing first 60 of ${SCHOLARS.length} — use the filter above to find a specific scholar.</div>`:''}
   </div>`;
@@ -2066,6 +2137,99 @@ window.App = {
   },
   closeGlobalModal(){ state.globalPanel=null; state.globalCamOpen=false; stopCamera(); render(); },
   toggleGlobalCamera(){ state.globalCamOpen=!state.globalCamOpen; if(!state.globalCamOpen) stopCamera(); render(); },
+  async saveStudentPhotoById(studentId,file){
+    const sid=studentPhotoId(studentId);
+    if(!sid) throw new Error('Student ID is required.');
+    if(!file || !String(file.type||'').startsWith('image/')) throw new Error('Please select an image file.');
+
+    const blob=await resizeStudentPhoto(file);
+    if(FIREBASE_ENABLED){
+      const key=studentPhotoDocKey(sid);
+      const path='studentPhotos/'+key+'.jpg';
+      const ref=storage.ref().child(path);
+      await ref.put(blob,{contentType:'image/jpeg',customMetadata:{studentId:sid}});
+      const url=await ref.getDownloadURL();
+      await db.collection('studentPhotos').doc(key).set({
+        studentId:sid,
+        url:url,
+        path:path,
+        updatedAt:Date.now()
+      },{merge:true});
+      STUDENT_PHOTOS[sid]={studentId:sid,url:url,path:path,updatedAt:Date.now()};
+    }else{
+      const dataUrl=await new Promise((resolve,reject)=>{
+        const r=new FileReader(); r.onload=()=>resolve(r.result); r.onerror=()=>reject(new Error('Could not save local photo.')); r.readAsDataURL(blob);
+      });
+      STUDENT_PHOTOS[sid]={studentId:sid,url:dataUrl,updatedAt:Date.now()};
+      saveLocalStudentPhotos();
+    }
+    return STUDENT_PHOTOS[sid];
+  },
+  async uploadScholarPhoto(scholarId,file){
+    if(!file)return;
+    const sc=SCHOLARS.find(x=>x.id===scholarId);
+    if(!sc){toast('⚠ Scholar not found.');return;}
+    const sid=studentPhotoId(sc.studentId);
+    if(!sid){toast('⚠ This scholar needs a Student ID before a photo can be attached.');return;}
+    toast('Uploading photo for '+fullName(sc)+'…');
+    try{
+      await App.saveStudentPhotoById(sid,file);
+      toast('✔ Photo saved for '+fullName(sc)+' — matched to Student ID '+sid+'.');
+      render();
+    }catch(err){ toast('⚠ Photo upload failed: '+err.message); }
+  },
+  async removeScholarPhoto(scholarId){
+    const sc=SCHOLARS.find(x=>x.id===scholarId);
+    if(!sc)return;
+    const sid=studentPhotoId(sc.studentId);
+    if(!sid||!STUDENT_PHOTOS[sid])return;
+    if(!confirm('Remove the saved photo for '+fullName(sc)+' (Student ID '+sid+')?'))return;
+    try{
+      const rec=STUDENT_PHOTOS[sid];
+      if(FIREBASE_ENABLED){
+        if(rec.path){ try{ await storage.ref().child(rec.path).delete(); }catch(e){} }
+        await db.collection('studentPhotos').doc(studentPhotoDocKey(sid)).delete();
+      }
+      delete STUDENT_PHOTOS[sid];
+      if(!FIREBASE_ENABLED)saveLocalStudentPhotos();
+      toast('✔ Student photo removed.');
+      render();
+    }catch(err){toast('⚠ Could not remove photo: '+err.message);}
+  },
+  async bulkUploadStudentPhotos(fileList){
+    const files=Array.from(fileList||[]);
+    const status=document.getElementById('photoUploadStatus');
+    if(!files.length)return;
+    const byId=new Map(SCHOLARS.filter(sc=>studentPhotoId(sc.studentId)).map(sc=>[studentPhotoId(sc.studentId),sc]));
+    let matched=0,unmatched=0,failed=0;
+    const unmatchedNames=[];
+    if(status)status.textContent='Matching '+files.length+' photo file(s) by Student ID…';
+
+    for(let i=0;i<files.length;i++){
+      const f=files[i];
+      const base=String(f.name||'').replace(/\.[^.]+$/,'').trim();
+      const sc=byId.get(base);
+      if(!sc){
+        unmatched++;
+        if(unmatchedNames.length<12)unmatchedNames.push(f.name);
+        continue;
+      }
+      try{
+        if(status)status.textContent='Uploading '+(i+1)+' of '+files.length+': '+f.name+' → '+fullName(sc)+'…';
+        await App.saveStudentPhotoById(base,f);
+        matched++;
+      }catch(err){ failed++; }
+    }
+
+    let msg='✔ Bulk photo upload complete: '+matched+' matched';
+    if(unmatched)msg+=', '+unmatched+' unmatched';
+    if(failed)msg+=', '+failed+' failed';
+    msg+='.';
+    if(unmatchedNames.length)msg+=' Unmatched examples: '+unmatchedNames.join(', ');
+    if(status)status.textContent=msg;
+    toast(msg);
+    render();
+  },
   setHouseImage(houseId, file){
     if(!file) return;
     if(file.size > 800*1024){ toast('⚠ That image is large — try one under ~500KB for faster loading.'); }
@@ -2273,6 +2437,17 @@ function startFirebaseSync(){
         render();
       }, err=> toast('⚠ Sync error: '+err.message));
       eventRef.onSnapshot(snap=>{ EVENT_AWARDS=snap.docs.map(d=>d.data()); render(); },()=>{});
+
+      db.collection('studentPhotos').onSnapshot(snap=>{
+        const next={};
+        snap.docs.forEach(d=>{
+          const rec=d.data()||{};
+          const sid=studentPhotoId(rec.studentId);
+          if(sid && rec.url) next[sid]=rec;
+        });
+        STUDENT_PHOTOS=next;
+        render();
+      }, err=>{ console.warn('Student photo sync unavailable:',err.message); });
 
       db.collection('settings').doc('houseImages').onSnapshot(doc=>{
         if(doc.exists){
