@@ -9,6 +9,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
@@ -120,6 +121,7 @@
   .modal-box{background:#fff;border-radius:16px;max-width:520px;width:100%;margin-top:36px;position:relative;box-shadow:0 20px 50px rgba(0,0,0,.35);}
   .modal-close{position:absolute;top:10px;right:10px;background:#EEF1F6;border:none;border-radius:50%;width:34px;height:34px;font-size:16px;cursor:pointer;z-index:2;}
   .modal-inner{padding:20px;}
+@media print{.no-print{display:none!important;}}
 </style>
 </head>
 <body>
@@ -144,9 +146,11 @@ const PUBLIC_DISPLAY_MODE = (function(){
   catch(e){ return false; }
 })();
 let db = null;
+let storage = null;
 if (FIREBASE_ENABLED) {
   firebase.initializeApp(firebaseConfig);
   db = firebase.firestore();
+  storage = firebase.storage();
 }
 
 /* ============================= DATA ============================= */
@@ -236,6 +240,13 @@ const state = {
   houseCupChampionshipLocked:false,
   houseCupChampionLocked:false,
   publicDisplaySlide:0,
+  liveEventMode:false,
+  liveEventName:'',
+  printMode:false,
+  printSections:{pos:true,neg:true,rewards:true},
+  reportFrom:null,
+  reportTo:null,
+  demoHomeroom:null,
   // --- staff login (only used when FIREBASE_ENABLED) ---
   authUser:null,           // firebase auth user object once signed in
   staffProfile:null,       // {name, role, houseId, canSubtract} loaded from Firestore 'staff' collection
@@ -321,6 +332,7 @@ function importRowsToScholars(rows){
 function houseTotals(){
   const totals={}; HOUSES.forEach(h=>totals[h.id]=0);
   SCHOLARS.forEach(s=> totals[s.houseId]+=s.currentPoints);
+  EVENT_AWARDS.forEach(a=>{ if(totals[a.houseId]!==undefined) totals[a.houseId]+=(parseInt(a.points,10)||0); });
   return totals;
 }
 function todayStats(){
@@ -448,6 +460,23 @@ function renderTopbar(){
     </select>`}
   </div>`;
 }
+
+let EVENT_AWARDS=[];
+function eventAwardTotals(){
+  const totals={}; HOUSES.forEach(h=>totals[h.id]=0);
+  EVENT_AWARDS.forEach(a=>{ totals[a.houseId]=(totals[a.houseId]||0)+(parseInt(a.points,10)||0); });
+  return totals;
+}
+function distinctHomerooms(){ return [...new Set(SCHOLARS.map(s=>s.homeroom).filter(Boolean))].sort(); }
+function filterTransactionsByReportRange(list){
+  return (list||[]).filter(t=>{
+    const d=new Date(t.ts); if(isNaN(d)) return false;
+    const ymd=d.toISOString().slice(0,10);
+    if(state.reportFrom && ymd<state.reportFrom) return false;
+    if(state.reportTo && ymd>state.reportTo) return false;
+    return true;
+  });
+}
 const ROLE_LABELS = {admin:'Administrator', house_admin:'House Admin', teacher:'Teacher / Staff', student:'Student View'};
 
 const NAV_ITEMS = [
@@ -457,9 +486,12 @@ const NAV_ITEMS = [
   {id:'search', label:'Search', ic:'🔎', roles:['admin','house_admin','teacher']},
   {id:'leaderboard', label:'Leaders', ic:'🏆', roles:['admin','house_admin','teacher','student']},
   {id:'houses', label:'Houses', ic:'🛡️', roles:['admin','house_admin','teacher','student']},
+  {id:'myclass', label:'My Class', ic:'👩‍🏫', roles:['teacher']},
   {id:'badges', label:'Badges', ic:'🏅', roles:['admin','house_admin','teacher','student']},
   {id:'rewards', label:'Rewards', ic:'🎁', roles:['admin','house_admin','teacher','student']},
   {id:'history', label:'History', ic:'📜', roles:['admin','house_admin','teacher']},
+  {id:'reports', label:'Reports', ic:'📊', roles:['admin','house_admin']},
+  {id:'competitions', label:'Events', ic:'🎉', roles:['admin','house_admin']},
   {id:'rulebook', label:'Rulebook', ic:'📘', roles:['admin','house_admin','teacher','student']},
   {id:'manage', label:'Manage', ic:'⚙️', roles:['admin']},
 ];
@@ -1510,6 +1542,27 @@ function viewHistory(){
   </div>`;
 }
 
+
+function viewMyClass(){
+  const homeroom=(FIREBASE_ENABLED&&state.staffProfile&&state.staffProfile.homeroom)?state.staffProfile.homeroom:(state.demoHomeroom||distinctHomerooms()[0]||'');
+  const list=SCHOLARS.filter(x=>x.status==='active'&&(!homeroom||x.homeroom===homeroom)).sort((a,b)=>b.currentPoints-a.currentPoints);
+  return `<div class="card"><h2>👩‍🏫 My Class</h2>${!FIREBASE_ENABLED?`<label>Preview Homeroom<select onchange="App.setDemoHomeroom(this.value)">${distinctHomerooms().map(h=>`<option ${h===homeroom?'selected':''}>${h}</option>`).join('')}</select></label>`:''}<div class="subtle">${homeroom||'No homeroom assigned'}</div></div><div class="card">${list.length?`<table><thead><tr><th>Scholar</th><th>House</th><th>Current</th><th>Lifetime</th><th>Badges</th></tr></thead><tbody>${list.map(sc=>`<tr><td>${fullName(sc)}</td><td>${houseById(sc.houseId).name}</td><td>${sc.currentPoints}</td><td>${sc.lifetimePoints}</td><td>${badgesFor(sc).join(', ')||'—'}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">No scholars found.</div>'}</div>`;
+}
+function renderPrintPreview(){
+  const sec=state.printSections,today=new Date().toLocaleDateString();
+  return `<div style="max-width:800px;margin:0 auto;padding:32px;background:#fff;color:#111"><div class="no-print" style="display:flex;gap:10px;margin-bottom:20px"><button class="btn btn-navy" onclick="window.print()">🖨️ Print / Save as PDF</button><button class="btn btn-outline" onclick="App.closePrintPreview()">← Back to App</button></div><div style="text-align:center;border-bottom:3px solid #111;padding-bottom:12px;margin-bottom:20px"><h1>🦁 GWCA House Points</h1><div>Reference Sheet — ${today}</div></div>${sec.pos?`<h2>🟢 Good Behavior</h2><table><tbody>${POS_CATEGORIES.map(c=>`<tr><td>${c.name}</td><td>${c.points||c.value||''}</td></tr>`).join('')}</tbody></table>`:''}${sec.neg?`<h2>🔴 Disciplinary</h2><table><tbody>${NEG_CATEGORIES.map(c=>`<tr><td>${c.name}</td><td>${c.points||c.value||''}</td></tr>`).join('')}</tbody></table>`:''}${sec.rewards?`<h2>🎁 Rewards</h2><table><tbody>${REWARDS.map(r=>`<tr><td>${r.name}</td><td>${r.cost||''}</td></tr>`).join('')}</tbody></table>`:''}</div>`;
+}
+function viewReports(){
+ const filtered=filterTransactionsByReportRange(TRANSACTIONS);
+ return `<div class="card"><h2>📊 Reports</h2><div class="grid grid-2"><label>From<input type="date" value="${state.reportFrom||''}" onchange="App.setReportFrom(this.value)"></label><label>To<input type="date" value="${state.reportTo||''}" onchange="App.setReportTo(this.value)"></label></div><div class="subtle" style="margin-top:8px">${filtered.length} transactions in range</div></div><div class="card"><h2>🖨️ Printable Reference Sheets</h2><div style="display:flex;flex-direction:column;gap:8px;margin:10px 0"><label style="text-transform:none"><input id="printPos" type="checkbox" checked style="width:auto"> Good Behavior categories</label><label style="text-transform:none"><input id="printNeg" type="checkbox" checked style="width:auto"> Disciplinary categories</label><label style="text-transform:none"><input id="printRewards" type="checkbox" checked style="width:auto"> Rewards Catalog</label></div><button class="btn btn-primary" onclick="App.openPrintPreview()">🖨️ Preview & Print</button></div>`;
+}
+function renderLiveEventMode(){
+ const totals=houseTotals();
+ return `<div style="min-height:100vh;background:var(--navy);color:#fff;padding:28px"><div style="max-width:1200px;margin:auto"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><div><h1 style="font-size:40px;margin:0">📺 Live Event Mode</h1><input id="liveEventName" value="${state.liveEventName||''}" oninput="App.setLiveEventName(this.value)" placeholder="Event name" style="margin-top:10px;max-width:420px"></div><button class="btn btn-outline" onclick="App.exitLiveMode()">Exit</button></div><div class="grid grid-3" style="margin-top:24px">${HOUSES.map(h=>`<div class="card" style="text-align:center"><div class="house-crest" style="margin:auto;background:${h.color}">${houseIcon(h,40)}</div><h2>${h.name}</h2><div class="display" style="font-size:38px">${totals[h.id]||0}</div><div class="chip-row" style="justify-content:center">${[5,10,25,50].map(n=>`<button class="chip" onclick="App.awardEventPoints('${h.id}',${n},state.liveEventName,'Live Event')">+${n}</button>`).join('')}</div></div>`).join('')}</div></div></div>`;
+}
+function viewCompetitions(){
+ return `<div class="card"><h2>🎉 Events / Competition Points</h2><p class="subtle">Use Live Event Mode for assemblies and rallies. These awards remain part of the original House Points event system and are separate from the new House Cup competition module.</p><button class="btn btn-navy btn-block" onclick="App.enterLiveMode()">📺 Enter Live Event Mode</button></div><div class="card"><h2>Award Points to a House</h2><div class="grid grid-2"><label>House<select id="compHouseSelect">${HOUSES.map(h=>`<option value="${h.id}">${h.name}</option>`).join('')}</select></label><label>Points<input id="compPoints" type="number"></label></div><label>Event Name<input id="compEventName" type="text"></label><label>Note<input id="compNote" type="text"></label><button class="btn btn-primary" onclick="App.awardEventPointsFromForm()">Award Event Points</button></div>`;
+}
 function viewRulebook(){
   const sections = [
     ['Welcome to the GWCA House System','Every scholar at George Washington Carver Academy belongs to one of five Houses. Together we live out S.P.I.C.E. — Service, Perseverance, Integrity, Compassion, and Equity — every single day.'],
@@ -1605,10 +1658,9 @@ function renderGlobalModal(){
 
 /* ============================= MAIN RENDER ============================= */
 function render(){
-  if(PUBLIC_DISPLAY_MODE){
-    document.getElementById('app').innerHTML = renderPublicDisplay();
-    return;
-  }
+  if(PUBLIC_DISPLAY_MODE){ document.getElementById('app').innerHTML = renderPublicDisplay(); return; }
+  if(state.liveEventMode){ document.getElementById('app').innerHTML = renderLiveEventMode(); return; }
+  if(state.printMode){ document.getElementById('app').innerHTML = renderPrintPreview(); return; }
   if(FIREBASE_ENABLED && !state.authUser){
     document.getElementById('app').innerHTML = renderLoginScreen();
     return;
@@ -1621,9 +1673,12 @@ function render(){
     case 'search': body = viewScanSearch('search'); break;
     case 'leaderboard': body = viewLeaderboard(); break;
     case 'houses': body = viewHouses(); break;
+    case 'myclass': body = viewMyClass(); break;
     case 'badges': body = viewBadges(); break;
     case 'rewards': body = viewRewards(); break;
     case 'history': body = viewHistory(); break;
+    case 'reports': body = (state.role==='admin'||state.role==='house_admin') ? viewReports() : '<div class="empty">Admin or House Admin access required.</div>'; break;
+    case 'competitions': body = (state.role==='admin'||state.role==='house_admin') ? viewCompetitions() : '<div class="empty">Admin or House Admin access required.</div>'; break;
     case 'rulebook': body = viewRulebook(); break;
     case 'manage': body = isAdmin() ? viewManage() : '<div class="empty">Admin access required.</div>'; break;
     default: body = viewDashboard();
@@ -1811,6 +1866,16 @@ window.App = {
     state.entry={mode:null,category:null,custom:null,note:'',error:null};
     render();
   },
+  setDemoHomeroom(v){state.demoHomeroom=v;render();},
+  setReportFrom(v){state.reportFrom=v||null;render();},
+  setReportTo(v){state.reportTo=v||null;render();},
+  enterLiveMode(){state.liveEventMode=true;render();},
+  exitLiveMode(){state.liveEventMode=false;render();},
+  setLiveEventName(v){state.liveEventName=v;},
+  openPrintPreview(){state.printSections={pos:document.getElementById('printPos')?.checked!==false,neg:document.getElementById('printNeg')?.checked!==false,rewards:document.getElementById('printRewards')?.checked!==false};state.printMode=true;render();},
+  closePrintPreview(){state.printMode=false;render();},
+  awardEventPoints(houseId,points,competitionName,note){points=parseInt(points,10);if(!houseId||!points){toast('⚠ Enter a non-zero point value.');return;}const award={id:uid('EVT'),houseId,competitionName:(competitionName||'Live Event').trim()||'Live Event',points,note:(note||'').trim(),staffRole:state.role,ts:Date.now()};if(FIREBASE_ENABLED)db.collection('eventAwards').doc(award.id).set(award).catch(err=>toast('⚠ Sync error: '+err.message));EVENT_AWARDS.unshift(award);toast((points>0?'+':'')+points+' to '+houseById(houseId).name+'!');render();},
+  awardEventPointsFromForm(){const h=document.getElementById('compHouseSelect').value,p=document.getElementById('compPoints').value,n=document.getElementById('compEventName').value,no=document.getElementById('compNote').value;App.awardEventPoints(h,p,n,no);},
   exportBadges(){
     const rows=SCHOLARS.filter(sc=>badgesFor(sc).length>0).map(sc=>({
       'Scholar':fullName(sc),
@@ -1945,6 +2010,7 @@ document.addEventListener('visibilitychange',()=>{ if(document.hidden && camStre
 function startFirebaseSync(){
   const scholarsRef = db.collection('scholars');
   const txRef = db.collection('transactions').orderBy('ts','desc').limit(300);
+  const eventRef = db.collection('eventAwards').orderBy('ts','desc').limit(300);
 
   scholarsRef.get().then(snap=>{
     if(snap.empty){
@@ -1967,6 +2033,7 @@ function startFirebaseSync(){
         TRANSACTIONS = snap.docs.map(d=>d.data());
         render();
       }, err=> toast('⚠ Sync error: '+err.message));
+      eventRef.onSnapshot(snap=>{ EVENT_AWARDS=snap.docs.map(d=>d.data()); render(); },()=>{});
 
       db.collection('settings').doc('houseImages').onSnapshot(doc=>{
         if(doc.exists){
