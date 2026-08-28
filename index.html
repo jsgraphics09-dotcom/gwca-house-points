@@ -1596,14 +1596,15 @@ function viewManage(){
   </div>
 
   <div class="card" style="border:2px solid #C0392B;">
-    <h2 style="color:#C0392B;">Reset Scholar Points & History</h2>
+    <h2 style="color:#C0392B;">Reset Scholar & House Points</h2>
     <p class="subtle">
       Admin only. This keeps the scholar roster, House assignments, and profile information,
       but resets every scholar's <strong>Current Points</strong>, <strong>Lifetime Points</strong>,
-      and <strong>Store Rewards Balance</strong> to 0 and clears the point transaction history.
+      and <strong>Store Rewards Balance</strong> to 0, clears the point transaction history,
+      and resets all <strong>regular House Points</strong> to 0. The separate House Cup competition system is not changed.
     </p>
     <button class="btn" style="background:#C0392B;color:#fff;" onclick="App.resetAllScholarPointsAndHistory()">
-      ⚠ Reset All Scholar Points & History
+      ⚠ Reset Scholar & House Points
     </button>
   </div>
 
@@ -1969,10 +1970,10 @@ window.App = {
     }
 
     const first = confirm(
-      'RESET ALL SCHOLAR POINTS & HISTORY?\n\n' +
+      'RESET ALL SCHOLAR & REGULAR HOUSE POINTS?\n\n' +
       'This will set Current Points, Lifetime Points, and Store Rewards Balance to 0 for every scholar, ' +
-      'and clear all point transaction history.\n\n' +
-      'The scholar roster itself will NOT be deleted.'
+      'clear all point transaction history, and remove all regular House/event point awards so every House returns to 0.\n\n' +
+      'The scholar roster and the separate House Cup competition system will NOT be deleted or reset.'
     );
     if(!first) return;
 
@@ -1986,6 +1987,7 @@ window.App = {
       if(FIREBASE_ENABLED){
         const scholarsRef = db.collection('scholars');
         const txRef = db.collection('transactions');
+        const eventAwardsRef = db.collection('eventAwards');
 
         const scholarSnap = await scholarsRef.get();
         for(let i=0;i<scholarSnap.docs.length;i+=400){
@@ -2007,6 +2009,15 @@ window.App = {
           await batch.commit();
         }
 
+        // Clear regular House/event point awards. These awards feed the
+        // original House Point standings and are separate from House Cup.
+        const eventSnap = await eventAwardsRef.get();
+        for(let i=0;i<eventSnap.docs.length;i+=400){
+          const batch = db.batch();
+          eventSnap.docs.slice(i,i+400).forEach(doc=>batch.delete(doc.ref));
+          await batch.commit();
+        }
+
         // Also clear local copies immediately while Firestore listeners refresh.
         SCHOLARS = SCHOLARS.map(sc=>({
           ...sc,
@@ -2015,6 +2026,7 @@ window.App = {
           rewardBalance:0
         }));
         TRANSACTIONS = [];
+        EVENT_AWARDS = [];
       } else {
         SCHOLARS = SCHOLARS.map(sc=>({
           ...sc,
@@ -2023,12 +2035,13 @@ window.App = {
           rewardBalance:0
         }));
         TRANSACTIONS = [];
+        EVENT_AWARDS = [];
       }
 
       BADGE_SEEN = {};
       LAST_HOUSE_LEADER = null;
       notificationsPrimed = false;
-      toast('✔ All scholar points and point history have been reset.');
+      toast('✔ Scholar points, regular House Points, rewards, and point history have been reset. House Cup was not changed.');
       render();
     };
 
