@@ -541,11 +541,16 @@ const NAV_ITEMS = [
   {id:'manage', label:'Manage', ic:'⚙️', roles:['admin']},
 ];
 function renderMobileNav(){
-  const items = NAV_ITEMS.filter(i=>i.roles.includes(state.role));
-  const primary = items.slice(0,4);
-  const overflow = items.slice(4);
+  // House Cup is intentionally pinned so it can never disappear because of role/menu filtering.
+  const visible = NAV_ITEMS.filter(i=>i.roles.includes(state.role) && i.id!=='housecup');
+  const dashboard = visible.find(i=>i.id==='dashboard');
+  const scan = visible.find(i=>i.id==='scan');
+  const search = visible.find(i=>i.id==='search');
+  const pinned = [dashboard, {id:'housecup',label:'House Cup',ic:'🏆'}, scan, search].filter(Boolean);
+  const pinnedIds = new Set(pinned.map(i=>i.id));
+  const overflow = visible.filter(i=>!pinnedIds.has(i.id));
   return `<nav class="mobile-nav">
-    ${primary.map(i=>`
+    ${pinned.map(i=>`
       <button class="${state.tab===i.id?'active':''}" onclick="App.setTab('${i.id}')">
         <span class="ic">${i.ic}</span>${i.label}
       </button>`).join('')}
@@ -556,7 +561,11 @@ function renderMobileNav(){
   </nav>`;
 }
 function renderDesktopNav(){
-  const items = NAV_ITEMS.filter(i=>i.roles.includes(state.role));
+  // Pin House Cup directly under Dashboard. This bypasses role/menu filtering for this core screen.
+  const visible = NAV_ITEMS.filter(i=>i.roles.includes(state.role) && i.id!=='housecup');
+  const dashboard = visible.filter(i=>i.id==='dashboard');
+  const rest = visible.filter(i=>i.id!=='dashboard');
+  const items = [...dashboard, {id:'housecup',label:'House Cup',ic:'🏆'}, ...rest];
   return `<nav class="desktop-nav">
     <div class="nav-role">Menu • ${ROLE_LABELS[state.role] || state.role}</div>
     ${items.map(i=>`
@@ -567,7 +576,7 @@ function renderDesktopNav(){
 }
 function renderMoreMenu(){
   if(!state.moreMenuOpen) return '';
-  const items = NAV_ITEMS.filter(i=>i.roles.includes(state.role)).slice(4);
+  const items = NAV_ITEMS.filter(i=>i.roles.includes(state.role) && i.id!=='housecup').slice(4);
   return `<div class="modal-backdrop" onmousedown="if(event.target===this){App.toggleMoreMenu()}">
     <div class="modal-box" style="max-width:320px;">
       <button class="modal-close" onclick="App.toggleMoreMenu()">✕</button>
