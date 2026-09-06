@@ -1803,8 +1803,7 @@ function viewManage(){
     <div style="background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px">
       <strong>Bulk Photo Upload</strong>
       <div class="subtle" style="margin:5px 0 10px">
-        Name each image file with the scholar's Student ID — for example:
-        <code>12345.jpg</code>, <code>12346.png</code>. Select all of the photos at once and the system will match them automatically.
+        The system matches photos by Student ID even when the ID is part of a longer filename. Examples: <code>12345.jpg</code>, <code>12345_Smith.jpg</code>, <code>Student-12345.png</code>. It can also use a unique scholar name as a fallback. Select all photos at once.
       </div>
       <input type="file" id="studentPhotoFiles" accept="image/*" multiple onchange="App.bulkUploadStudentPhotos(this.files)">
       <div id="photoUploadStatus" class="subtle" style="margin-top:8px"></div>
@@ -2426,32 +2425,96 @@ window.App = {
     const files=Array.from(fileList||[]);
     const status=document.getElementById('photoUploadStatus');
     if(!files.length)return;
-    const byId=new Map(SCHOLARS.filter(sc=>studentPhotoId(sc.studentId)).map(sc=>[studentPhotoId(sc.studentId),sc]));
+
+    // Flexible matching: exact Student ID first, then Student ID found anywhere
+    // in the filename (2061_Smith.jpg, Student-2061.jpg, etc.). As a final
+    // fallback, match a UNIQUE scholar name when the filename contains the name.
+    const clean=v=>String(v==null?'':v).trim();
+    const normId=v=>{
+      const x=clean(v).toUpperCase().replace(/[^A-Z0-9]/g,'');
+      return /^\d+$/.test(x) ? (x.replace(/^0+(?=\d)/,'')||'0') : x;
+    };
+    const normName=v=>clean(v).toUpperCase().replace(/[^A-Z0-9]/g,'');
+    const roster=SCHOLARS.filter(sc=>studentPhotoId(sc.studentId));
+    const byExact=new Map();
+    const byNorm=new Map();
+    roster.forEach(sc=>{
+      const sid=studentPhotoId(sc.studentId);
+      byExact.set(sid.toUpperCase(),sc);
+      const n=normId(sid);
+      if(n && !byNorm.has(n))byNorm.set(n,sc);
+    });
+
+    const nameBuckets=new Map();
+    roster.forEach(sc=>{
+      const variants=[fullName(sc), (sc.last||'')+' '+(sc.first||''), (sc.first||'')+' '+(sc.last||'')];
+      variants.forEach(v=>{
+        const n=normName(v); if(!n)return;
+        if(!nameBuckets.has(n))nameBuckets.set(n,[]);
+        const arr=nameBuckets.get(n); if(!arr.includes(sc))arr.push(sc);
+      });
+    });
+
+    function matchPhotoFile(file){
+      const base=clean(file&&file.name).replace(/\.[^.]+$/,'').trim();
+      const upper=base.toUpperCase();
+      if(byExact.has(upper))return {sc:byExact.get(upper),method:'exact ID'};
+
+      const compact=normId(base);
+      if(byNorm.has(compact))return {sc:byNorm.get(compact),method:'normalized ID'};
+
+      // Look for delimited ID-like tokens anywhere in the filename.
+      const tokens=upper.split(/[^A-Z0-9]+/).filter(Boolean);
+      for(const t of tokens){
+        const n=normId(t);
+        if(byNorm.has(n))return {sc:byNorm.get(n),method:'ID in filename'};
+      }
+
+      // Also handle IDs attached to words, e.g. IMG2061 or 2061SMITH.
+      for(const [sidNorm,sc] of byNorm){
+        if(sidNorm.length>=3 && compact.includes(sidNorm))return {sc,method:'embedded ID'};
+      }
+
+      const nameCompact=normName(base);
+      for(const [nm,arr] of nameBuckets){
+        if(arr.length===1 && nm.length>=5 && nameCompact.includes(nm))return {sc:arr[0],method:'unique name'};
+      }
+      return null;
+    }
+
     let matched=0,unmatched=0,failed=0;
-    const unmatchedNames=[];
-    if(status)status.textContent='Matching '+files.length+' photo file(s) by Student ID…';
+    const unmatchedNames=[], failedNames=[];
+    const methodCounts={};
+    if(status)status.textContent='Matching '+files.length+' photo file(s) to the roster…';
 
     for(let i=0;i<files.length;i++){
       const f=files[i];
-      const base=String(f.name||'').replace(/\.[^.]+$/,'').trim();
-      const sc=byId.get(base);
-      if(!sc){
+      const hit=matchPhotoFile(f);
+      if(!hit){
         unmatched++;
         if(unmatchedNames.length<12)unmatchedNames.push(f.name);
         continue;
       }
+      const sc=hit.sc, sid=studentPhotoId(sc.studentId);
       try{
-        if(status)status.textContent='Uploading '+(i+1)+' of '+files.length+': '+f.name+' → '+fullName(sc)+'…';
-        await App.saveStudentPhotoById(base,f);
+        if(status)status.textContent='Uploading '+(i+1)+' of '+files.length+': '+f.name+' → '+fullName(sc)+' ('+sid+')…';
+        await App.saveStudentPhotoById(sid,f);
         matched++;
-      }catch(err){ failed++; }
+        methodCounts[hit.method]=(methodCounts[hit.method]||0)+1;
+      }catch(err){
+        failed++;
+        if(failedNames.length<8)failedNames.push(f.name+': '+(err&&err.message?err.message:String(err)));
+      }
     }
 
     let msg='✔ Bulk photo upload complete: '+matched+' matched';
     if(unmatched)msg+=', '+unmatched+' unmatched';
     if(failed)msg+=', '+failed+' failed';
     msg+='.';
-    if(unmatchedNames.length)msg+=' Unmatched examples: '+unmatchedNames.join(', ');
+    const methods=Object.entries(methodCounts).map(([k,v])=>k+' '+v).join(', ');
+    if(methods)msg+=' Match types: '+methods+'.';
+    if(unmatchedNames.length)msg+=' Unmatched examples: '+unmatchedNames.join(', ')+'.';
+    if(failedNames.length)msg+=' Upload errors: '+failedNames.join(' | ')+'.';
     if(status)status.textContent=msg;
     toast(msg);
     render();
