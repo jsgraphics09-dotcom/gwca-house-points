@@ -256,6 +256,7 @@ if(!FIREBASE_ENABLED){
 }
 let TRANSACTIONS=[]; // {id,scholarId,houseId,amount,dir,category,staffRole,note,ts}
 let REDEMPTIONS=[];
+let SAVINGS_TRANSACTIONS=[]; // {id,scholarId,type,amount,fromBalance,toBalance,staffRole,ts}
 let SYNC_READY = !FIREBASE_ENABLED;
 
 /* ============================= STATE ============================= */
@@ -266,6 +267,7 @@ const state = {
   searchQuery:'',
   selectedScholarId:null,
   entry:{mode:null, category:null, custom:null, note:'', error:null},
+  savingsBusy:false,
   hideLastNames:false,
   toast:null,
   camOpen:false,
@@ -275,7 +277,7 @@ const state = {
   globalCamOpen:false,
   moreMenuOpen:false,
   exportFilters:{house:'all',grade:'all',homeroom:'all',status:'all',minPoints:'',maxPoints:'',special:'all',sort:'last'},
-  exportColumns:['studentId','barcodeId','first','last','grade','homeroom','house','currentPoints','lifetimePoints','rewardBalance','status'],
+  exportColumns:['studentId','barcodeId','first','last','grade','homeroom','house','currentPoints','lifetimePoints','rewardBalance','savingsBalance','status'],
   exportSelectedIds:[],
   exportSelectionMode:false,
   exportLimit:null,
@@ -401,6 +403,7 @@ function importRowsToScholars(rows){
     const currentPoints = parseInt(rowGet(row,['current points'])) || 0;
     const lifetimePoints = parseInt(rowGet(row,['lifetime points'])) || 0;
     const rewardBalance = parseInt(rowGet(row,['store rewards balance','reward balance'])) || 0;
+    const savingsBalance = parseInt(rowGet(row,['savings account','savings balance','savings points'])) || 0;
     const status = (rowGet(row,['status']) || 'active').toLowerCase();
     const notes = rowGet(row,['notes']) || '';
     const parentName = rowGet(row,['parent name']);
@@ -411,7 +414,7 @@ function importRowsToScholars(rows){
     if(seen[id]) id = id+'_'+i;
     seen[id]=true;
     out.push({id, studentId, barcodeId:barcode, first, last, grade, homeroom, houseId,
-      currentPoints, lifetimePoints, rewardBalance, status, notes, parentName, parentEmail, parentPhone, lastScan:null});
+      currentPoints, lifetimePoints, rewardBalance, savingsBalance, status, notes, parentName, parentEmail, parentPhone, lastScan:null});
   });
   return out;
 }
@@ -1577,12 +1580,29 @@ function renderScholarPanel(){
           </div>` : `<div class="subtle" style="margin-top:8px;color:#A33;">Add a Student ID before uploading a photo.</div>`) : ''}
       </div>
     </div>
-    <div class="grid grid-3" style="margin-bottom:12px;">
+    <div class="grid grid-2" style="margin-bottom:12px;">
       ${statCard(s.currentPoints,'Current Points')}
       ${statCard(s.lifetimePoints,'Lifetime Points')}
       ${statCard(s.rewardBalance,'Reward Balance')}
+      ${statCard(Number(s.savingsBalance||0),'🏦 Savings Account')}
     </div>
     ${badges.length?`<div class="subtle" style="margin-bottom:10px;">🏅 ${badges.join(' · ')}</div>`:''}
+
+    <div class="card" style="background:#F7FBFF;border:1.5px solid #C9DCEF;margin:0 0 12px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+        <div>
+          <h2 style="margin:0 0 4px;">🏦 Scholar Savings Account</h2>
+          <div class="subtle">Protected points moved here from the Reward Balance. Deposits and withdrawals never change Lifetime Points or House totals.</div>
+        </div>
+        <div style="text-align:right;"><div class="subtle">Available Savings</div><div class="display" style="font-size:28px;">${Number(s.savingsBalance||0)} pts</div></div>
+      </div>
+      ${state.role!=='student' ? `
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+        <button class="btn btn-primary" onclick="App.depositToSavings('${s.id}')" ${state.savingsBusy?'disabled':''}>⬇ Deposit to Savings</button>
+        <button class="btn btn-outline" onclick="App.withdrawFromSavings('${s.id}')" ${(Number(s.savingsBalance||0)<=0||state.savingsBusy)?'disabled':''}>⬆ Withdraw to Reward Balance</button>
+      </div>` : ''}
+      ${renderSavingsHistory(s)}
+    </div>
 
     ${state.role!=='student' ? `
     <div style="display:flex;gap:8px;margin-bottom:12px;">
@@ -1599,6 +1619,12 @@ function renderScholarPanel(){
         <span class="subtle" style="float:right;">${new Date(t.ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
       </div>`).join('') : '<div class="empty">No point history yet.</div>'}
   </div>`;
+}
+
+function renderSavingsHistory(s){
+  const items=SAVINGS_TRANSACTIONS.filter(t=>t.scholarId===s.id).sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0,8);
+  if(!items.length) return '<div class="subtle" style="margin-top:10px;">No savings activity yet.</div>';
+  return `<div style="margin-top:12px;border-top:1px solid #D9E4EF;padding-top:8px;"><strong style="font-size:13px;">Recent Savings Activity</strong>${items.map(t=>`<div style="padding:6px 0;border-bottom:1px solid #E6EEF6;font-size:12px;display:flex;justify-content:space-between;gap:10px;"><span>${t.type==='deposit'?'⬇ Deposit':'⬆ Withdrawal'} <strong>${t.amount} pts</strong>${t.note?` <span class="subtle">— ${hcEsc(t.note)}</span>`:''}</span><span class="subtle">${new Date(t.ts).toLocaleDateString()} ${new Date(t.ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span></div>`).join('')}</div>`;
 }
 
 function renderEntryForm(s){
@@ -1729,7 +1755,7 @@ function viewBadges(){
 function viewRewards(){
   const s = state.selectedScholarId ? SCHOLARS.find(x=>x.id===state.selectedScholarId) : null;
   return `
-  ${s?`<div class="card"><strong>${fullName(s)}</strong> — Reward Balance: <strong>${s.rewardBalance}</strong> pts <button class="btn btn-outline" style="float:right;" onclick="App.clearScholarForRewards()">Change Scholar</button></div>`
+  ${s?`<div class="card"><strong>${fullName(s)}</strong> — Reward Balance: <strong>${s.rewardBalance}</strong> pts · Savings: <strong>${Number(s.savingsBalance||0)}</strong> pts <button class="btn btn-outline" style="float:right;" onclick="App.clearScholarForRewards()">Change Scholar</button></div>`
     :`<div class="card"><label>Select a scholar to redeem for (search below)</label><input id="searchQueryInput" type="text" placeholder="Search scholar…" value="${state.searchQuery}" oninput="App.setSearchQuery(this.value)">
       ${state.searchQuery? searchScholars(state.searchQuery).map(sc=>`<div style="padding:6px 0;cursor:pointer;" onclick="App.pickScholarForRewards('${sc.id}')">${fullName(sc)} — ${houseById(sc.houseId).name}</div>`).join('') : ''}
     </div>`}
@@ -1868,7 +1894,7 @@ function viewManage(){
     <p class="subtle">
       Admin only. This keeps the scholar roster, House assignments, and profile information,
       but resets every scholar's <strong>Current Points</strong>, <strong>Lifetime Points</strong>,
-      and <strong>Store Rewards Balance</strong> to 0, clears the point transaction history,
+      <strong>Store Rewards Balance</strong>, and <strong>Savings Account</strong> to 0, clears the point transaction history,
       and resets all <strong>regular House Points</strong> to 0. The separate House Cup competition system is not changed.
     </p>
     <button class="btn" style="background:#C0392B;color:#fff;" onclick="App.resetAllScholarPointsAndHistory()">
@@ -1902,7 +1928,7 @@ function viewManage(){
 
   <div class="card">
     <h2>Import Roster (CSV or Excel)</h2>
-    <p class="subtle">Upload an updated roster any time (e.g. a refreshed <code>Master_Carver_Roster</code> file). Matches columns named: Barcode ID, Student ID, First Name, Last Name, Grade, House, Teacher Name, Current Points, Lifetime Points, Store Rewards Balance, Parent Name, Parent Email, Parent Phone, Status, Notes. <strong>This replaces the entire current roster. Any scholar not in the uploaded file will be removed from the shared roster. Student photos are stored separately and will automatically reconnect when the same Student ID appears in the new roster.</strong></p>
+    <p class="subtle">Upload an updated roster any time (e.g. a refreshed <code>Master_Carver_Roster</code> file). Matches columns named: Barcode ID, Student ID, First Name, Last Name, Grade, House, Teacher Name, Current Points, Lifetime Points, Store Rewards Balance, Savings Account, Parent Name, Parent Email, Parent Phone, Status, Notes. <strong>This replaces the entire current roster. Any scholar not in the uploaded file will be removed from the shared roster. Student photos are stored separately and will automatically reconnect when the same Student ID appears in the new roster.</strong></p>
     <input type="file" id="rosterFile" accept=".csv,.xlsx,.xls" onchange="App.importRoster(this.files[0])">
     <div id="importStatus" class="subtle" style="margin-top:8px;"></div>
   </div>
@@ -1937,6 +1963,7 @@ const EXPORT_COLUMNS = [
   {id:'currentPoints', label:'Current Points', value:s=>Number(s.currentPoints||0)},
   {id:'lifetimePoints', label:'Lifetime Points', value:s=>Number(s.lifetimePoints||0)},
   {id:'rewardBalance', label:'Reward Balance', value:s=>Number(s.rewardBalance||0)},
+  {id:'savingsBalance', label:'Savings Account', value:s=>Number(s.savingsBalance||0)},
   {id:'positivePoints', label:'Positive Points', value:s=>exportTxStats(s).positive},
   {id:'negativePoints', label:'Points Deducted', value:s=>exportTxStats(s).negative},
   {id:'transactionCount', label:'Transactions', value:s=>exportTxStats(s).count},
@@ -2065,8 +2092,8 @@ function viewExport(){
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;"><h2 style="margin:0;">Preview</h2><div class="subtle">Showing ${Math.min(preview.length,40)} of ${rows.length}</div></div>
     <div style="overflow-x:auto;">
-      <table><thead><tr>${state.exportSelectionMode?'<th>Select</th>':''}<th>Scholar</th><th>Grade</th><th>Teacher</th><th>House</th><th>Points</th><th>Reward</th><th>Status</th></tr></thead><tbody>
-      ${preview.map(s=>`<tr>${state.exportSelectionMode?`<td><input type="checkbox" style="width:auto" ${state.exportSelectedIds.includes(s.id)?'checked':''} onchange="App.toggleExportScholar('${s.id}',this.checked)"></td>`:''}<td>${fullName(s)}</td><td>${s.grade||''}</td><td>${s.homeroom||''}</td><td>${houseById(s.houseId).name}</td><td><strong>${s.currentPoints||0}</strong></td><td>${s.rewardBalance||0}</td><td>${s.status||''}</td></tr>`).join('')}
+      <table><thead><tr>${state.exportSelectionMode?'<th>Select</th>':''}<th>Scholar</th><th>Grade</th><th>Teacher</th><th>House</th><th>Points</th><th>Reward</th><th>Savings</th><th>Status</th></tr></thead><tbody>
+      ${preview.map(s=>`<tr>${state.exportSelectionMode?`<td><input type="checkbox" style="width:auto" ${state.exportSelectedIds.includes(s.id)?'checked':''} onchange="App.toggleExportScholar('${s.id}',this.checked)"></td>`:''}<td>${fullName(s)}</td><td>${s.grade||''}</td><td>${s.homeroom||''}</td><td>${houseById(s.houseId).name}</td><td><strong>${s.currentPoints||0}</strong></td><td>${s.rewardBalance||0}</td><td>${Number(s.savingsBalance||0)}</td><td>${s.status||''}</td></tr>`).join('')}
       </tbody></table>
       ${rows.length===0?'<div class="empty">No scholars match these filters.</div>':''}
     </div>
@@ -2376,6 +2403,40 @@ window.App = {
     toast('🎉 '+name+' redeemed for '+fullName(s)+'!');
     render();
   },
+  async moveSavingsPoints(scholarId,type){
+    if(state.savingsBusy)return;
+    const s=SCHOLARS.find(x=>x.id===scholarId);
+    if(!s){toast('⚠ Scholar not found.');return;}
+    if(state.role==='student'){toast('⚠ Staff access required for savings transactions.');return;}
+    const isDeposit=type==='deposit';
+    const source=isDeposit?Number(s.rewardBalance||0):Number(s.savingsBalance||0);
+    if(source<=0){toast(isDeposit?'⚠ No Reward Balance points are available to deposit.':'⚠ This Savings Account has no points to withdraw.');return;}
+    const raw=prompt((isDeposit?'Deposit':'Withdraw')+' how many points?\n\nAvailable: '+source+' points');
+    if(raw===null)return;
+    const amount=parseInt(raw,10);
+    if(!Number.isFinite(amount)||amount<=0){toast('⚠ Enter a valid point amount.');return;}
+    if(amount>source){toast('⚠ Only '+source+' points are available.');return;}
+    const note=prompt('Optional note for this '+(isDeposit?'deposit':'withdrawal')+':','')||'';
+    const oldReward=Number(s.rewardBalance||0), oldSavings=Number(s.savingsBalance||0);
+    const newReward=isDeposit?oldReward-amount:oldReward+amount;
+    const newSavings=isDeposit?oldSavings+amount:oldSavings-amount;
+    const tx={id:uid('SV'),scholarId:s.id,type,amount,fromBalance:source,toBalance:isDeposit?newSavings:newReward,note:note.trim(),staffRole:state.role,staffName:(state.staffProfile&&state.staffProfile.name)||'',ts:Date.now()};
+    state.savingsBusy=true;
+    try{
+      if(FIREBASE_ENABLED){
+        const batch=db.batch();
+        batch.update(db.collection('scholars').doc(s.id),{rewardBalance:newReward,savingsBalance:newSavings});
+        batch.set(db.collection('savingsTransactions').doc(tx.id),tx);
+        await batch.commit();
+      }
+      s.rewardBalance=newReward; s.savingsBalance=newSavings;
+      SAVINGS_TRANSACTIONS.unshift(tx);
+      toast((isDeposit?'🏦 Deposited ':'🏦 Withdrew ')+amount+' points '+(isDeposit?'into savings for ':'from savings for ')+fullName(s)+'.');
+    }catch(err){toast('⚠ Savings transaction failed: '+err.message);}
+    finally{state.savingsBusy=false;render();}
+  },
+  depositToSavings(scholarId){ return App.moveSavingsPoints(scholarId,'deposit'); },
+  withdrawFromSavings(scholarId){ return App.moveSavingsPoints(scholarId,'withdraw'); },
   async persistPointRewardSettings(successMessage){
     try{
       await savePointRewardCatalog();
@@ -2474,14 +2535,14 @@ window.App = {
     if(preset==='reward_ready') state.exportFilters.special='reward_ready';
     if(preset==='missing_house') state.exportFilters.special='missing_house';
     if(preset==='barcode') state.exportColumns=['studentId','barcodeId','first','last','grade','homeroom','house'];
-    else if(preset==='all') state.exportColumns=['studentId','barcodeId','first','last','grade','homeroom','house','currentPoints','lifetimePoints','rewardBalance','status'];
+    else if(preset==='all') state.exportColumns=['studentId','barcodeId','first','last','grade','homeroom','house','currentPoints','lifetimePoints','rewardBalance','savingsBalance','status'];
     render();
   },
   toggleExportColumn(id,checked){
     const set=new Set(state.exportColumns); checked?set.add(id):set.delete(id); state.exportColumns=[...set]; render();
   },
   exportSelectAllColumns(){ state.exportColumns=EXPORT_COLUMNS.map(c=>c.id); render(); },
-  exportDefaultColumns(){ state.exportColumns=['studentId','barcodeId','first','last','grade','homeroom','house','currentPoints','lifetimePoints','rewardBalance','status']; render(); },
+  exportDefaultColumns(){ state.exportColumns=['studentId','barcodeId','first','last','grade','homeroom','house','currentPoints','lifetimePoints','rewardBalance','savingsBalance','status']; render(); },
   toggleExportSelectionMode(checked){ state.exportSelectionMode=checked; if(!checked) state.exportSelectedIds=[]; render(); },
   toggleExportScholar(id,checked){ const set=new Set(state.exportSelectedIds); checked?set.add(id):set.delete(id); state.exportSelectedIds=[...set]; render(); },
   selectAllExportScholars(){
@@ -2697,7 +2758,7 @@ window.App = {
 
     const first = confirm(
       'RESET ALL SCHOLAR & REGULAR HOUSE POINTS?\n\n' +
-      'This will set Current Points, Lifetime Points, and Store Rewards Balance to 0 for every scholar, ' +
+      'This will set Current Points, Lifetime Points, Store Rewards Balance, and Savings Account to 0 for every scholar, ' +
       'clear all point transaction history, and remove all regular House/event point awards so every House returns to 0.\n\n' +
       'The scholar roster and the separate House Cup competition system will NOT be deleted or reset.'
     );
@@ -2714,6 +2775,7 @@ window.App = {
         const scholarsRef = db.collection('scholars');
         const txRef = db.collection('transactions');
         const eventAwardsRef = db.collection('eventAwards');
+        const savingsRef = db.collection('savingsTransactions');
 
         const scholarSnap = await scholarsRef.get();
         for(let i=0;i<scholarSnap.docs.length;i+=400){
@@ -2722,7 +2784,8 @@ window.App = {
             batch.update(doc.ref,{
               currentPoints:0,
               lifetimePoints:0,
-              rewardBalance:0
+              rewardBalance:0,
+              savingsBalance:0
             });
           });
           await batch.commit();
@@ -2744,30 +2807,41 @@ window.App = {
           await batch.commit();
         }
 
+        const savingsSnap = await savingsRef.get();
+        for(let i=0;i<savingsSnap.docs.length;i+=400){
+          const batch = db.batch();
+          savingsSnap.docs.slice(i,i+400).forEach(doc=>batch.delete(doc.ref));
+          await batch.commit();
+        }
+
         // Also clear local copies immediately while Firestore listeners refresh.
         SCHOLARS = SCHOLARS.map(sc=>({
           ...sc,
           currentPoints:0,
           lifetimePoints:0,
-          rewardBalance:0
+          rewardBalance:0,
+          savingsBalance:0
         }));
         TRANSACTIONS = [];
         EVENT_AWARDS = [];
+        SAVINGS_TRANSACTIONS = [];
       } else {
         SCHOLARS = SCHOLARS.map(sc=>({
           ...sc,
           currentPoints:0,
           lifetimePoints:0,
-          rewardBalance:0
+          rewardBalance:0,
+          savingsBalance:0
         }));
         TRANSACTIONS = [];
         EVENT_AWARDS = [];
+        SAVINGS_TRANSACTIONS = [];
       }
 
       BADGE_SEEN = {};
       LAST_HOUSE_LEADER = null;
       notificationsPrimed = false;
-      toast('✔ Scholar points, regular House Points, rewards, and point history have been reset. House Cup was not changed.');
+      toast('✔ Scholar points, savings, regular House Points, rewards, and point history have been reset. House Cup was not changed.');
       render();
     };
 
@@ -2876,6 +2950,10 @@ function startFirebaseSync(){
         TRANSACTIONS = snap.docs.map(d=>d.data());
         render();
       }, err=> toast('⚠ Sync error: '+err.message));
+      db.collection('savingsTransactions').onSnapshot(snap=>{
+        SAVINGS_TRANSACTIONS = snap.docs.map(d=>d.data()).sort((a,b)=>(b.ts||0)-(a.ts||0));
+        render();
+      }, err=> console.warn('Savings transaction sync unavailable:',err.message));
       eventRef.onSnapshot(snap=>{ EVENT_AWARDS=snap.docs.map(d=>d.data()); render(); },()=>{});
 
       db.collection('studentPhotos').onSnapshot(snap=>{
