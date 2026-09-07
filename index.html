@@ -273,6 +273,8 @@ const state = {
   couponBusy:false,
   couponScan:'',
   couponInventoryReward:'all',
+  couponLookupCode:'',
+  couponReportDays:30,
   hideLastNames:false,
   toast:null,
   camOpen:false,
@@ -1623,6 +1625,19 @@ function renderScholarPanel(){
       ${renderSavingsHistory(s)}
     </div>
 
+    <div class="card" style="background:#FFFDF6;border:1.5px solid #F0D9A8;margin:0 0 12px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
+        <div><h2 style="margin:0 0 4px;">🎯 Savings Goal</h2><div class="subtle">Give saved points a purpose and show progress toward a reward or custom goal.</div></div>
+        ${state.role!=='student'?`<button class="btn btn-outline" onclick="App.setSavingsGoal('${s.id}')">${s.savingsGoalName?'Edit Goal':'Set Goal'}</button>`:''}
+      </div>
+      ${s.savingsGoalName&&Number(s.savingsGoalTarget||0)>0?(()=>{const bal=Number(s.savingsBalance||0),target=Number(s.savingsGoalTarget||0),pct=Math.max(0,Math.min(100,Math.round(bal/target*100)));return `<div style="margin-top:10px;"><div style="display:flex;justify-content:space-between;gap:8px;"><strong>${hcEsc(s.savingsGoalName)}</strong><strong>${bal} / ${target} pts</strong></div><div style="height:16px;background:#E8EDF3;border-radius:999px;overflow:hidden;margin-top:7px;"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#F58220,#0B1F3A);"></div></div><div class="subtle" style="margin-top:5px;">${pct}% complete</div></div>`})():`<div class="subtle" style="margin-top:10px;">No savings goal has been set yet.</div>`}
+    </div>
+
+    <div class="card" style="margin:0 0 12px;">
+      <h2 style="margin:0 0 8px;">🎟️ Reward History</h2>
+      ${rewardHistoryForScholar(s)}
+    </div>
+
     ${state.role!=='student' ? `
     <div style="display:flex;gap:8px;margin-bottom:12px;">
       <button class="btn btn-primary btn-block btn-lg" onclick="App.startEntry('${s.id}','positive')">➕ Add Points</button>
@@ -1772,6 +1787,7 @@ function viewBadges(){
 }
 
 function couponStatus(c){
+  if(c.status==='voided') return 'voided';
   if(c.status==='active' && c.expiresAt && Date.now()>c.expiresAt) return 'expired';
   return c.status||'available';
 }
@@ -1783,35 +1799,73 @@ function couponPrefix(name){
   const words=String(name||'REWARD').replace(/[^A-Za-z0-9 ]/g,' ').trim().split(/\s+/).filter(Boolean);
   return (words.map(w=>w[0]).join('').slice(0,4)||'RWD').toUpperCase();
 }
+function couponLookupCard(){
+  const code=String(state.couponLookupCode||'').trim().toUpperCase();
+  if(!code)return '';
+  const c=REWARD_COUPONS.find(x=>String(x.code||'').toUpperCase()===code);
+  if(!c)return `<div class="card" style="border:2px solid #B42318;background:#FFF5F5;"><h2 style="margin:0 0 6px;">⚠ Coupon Not Found</h2><div>${hcEsc(code)}</div></div>`;
+  const st=couponStatus(c), sc=SCHOLARS.find(x=>x.id===c.scholarId);
+  const red=REDEMPTIONS.find(r=>r.couponCode===c.code && (r.status==='active'||r.status==='voided')) || REDEMPTIONS.find(r=>r.couponCode===c.code);
+  const colors={available:'#64748B',active:'#16803A',expired:'#B45309',voided:'#B42318'};
+  return `<div class="card" style="border:3px solid ${colors[st]||'#0B1F3A'};background:#fff;">
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
+      <div><div class="subtle">Coupon Lookup</div><h2 style="margin:2px 0 4px;">🎟️ ${hcEsc(c.reward)}</h2><div style="font-size:18px;font-weight:800;letter-spacing:.5px;">${hcEsc(c.code)}</div></div>
+      <div style="font-weight:900;padding:7px 12px;border-radius:999px;background:${colors[st]||'#0B1F3A'};color:white;">${st.toUpperCase()}</div>
+    </div>
+    <div class="grid grid-2" style="margin-top:12px;">
+      <div><div class="subtle">Assigned Scholar</div><strong>${sc?hcEsc(fullName(sc)):'—'}</strong>${sc?`<div class="subtle">ID: ${hcEsc(sc.studentId||sc.barcodeId||'—')}</div>`:''}</div>
+      <div><div class="subtle">Points</div><strong>${Number(c.cost||0)} pts</strong></div>
+      <div><div class="subtle">Issued</div><strong>${c.issuedAt?new Date(c.issuedAt).toLocaleString():'—'}</strong></div>
+      <div><div class="subtle">Valid Through</div><strong>${c.expiresAt?new Date(c.expiresAt).toLocaleDateString():'—'}</strong></div>
+    </div>
+    ${red&&red.status==='used'?`<div class="subtle" style="margin-top:8px;">Last used ${red.usedAt?new Date(red.usedAt).toLocaleString():'—'}</div>`:''}
+    ${c.voidReason?`<div style="margin-top:8px;padding:8px;border-radius:8px;background:#FFF0F0;"><strong>Void reason:</strong> ${hcEsc(c.voidReason)}</div>`:''}
+    ${state.role!=='student'?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+      ${(st==='active'||st==='expired')?`<button class="btn btn-primary" onclick="App.markCouponUsed('${c.id}')">✔ Mark Used / Return</button><button class="btn btn-danger" onclick="App.voidCoupon('${c.id}')">🚫 Lost / Void</button>`:''}
+      ${st==='voided'&&c.scholarId?`<button class="btn btn-primary" onclick="App.replaceVoidedCoupon('${c.id}')">🎟️ Issue Replacement</button>`:''}${st==='voided'&&isAdmin()?`<button class="btn btn-outline" onclick="App.restoreVoidedCoupon('${c.id}')">↩ Restore Recovered Coupon</button>`:''}
+      ${st==='available'?`<span class="subtle">This coupon is ready to be assigned to a scholar.</span>`:''}
+      <button class="btn btn-outline" onclick="state.couponLookupCode='';render();">Clear</button>
+    </div>`:''}
+  </div>`;
+}
+function rewardHistoryForScholar(s,limit=10){
+  const rows=REDEMPTIONS.filter(r=>r.scholarId===s.id).sort((a,b)=>(b.ts||b.issuedAt||0)-(a.ts||a.issuedAt||0)).slice(0,limit);
+  if(!rows.length)return '<div class="subtle">No reward redemptions yet.</div>';
+  return `<div style="max-height:280px;overflow:auto;"><table><thead><tr><th>Date</th><th>Reward</th><th>Pts</th><th>Coupon</th><th>Status</th></tr></thead><tbody>${rows.map(r=>{const c=REWARD_COUPONS.find(x=>x.code===r.couponCode);const st=r.status==='used'?'used':r.status==='voided'?'voided':(c?couponStatus(c):(r.expiresAt&&Date.now()>r.expiresAt?'expired':r.status||'active'));return `<tr><td>${new Date(r.issuedAt||r.ts||Date.now()).toLocaleDateString()}</td><td>${hcEsc(r.reward||'Reward')}</td><td>${r.replacement?'Replacement':Number(r.cost||0)}</td><td>${hcEsc(r.couponCode||'—')}</td><td><strong>${String(st).toUpperCase()}</strong></td></tr>`}).join('')}</tbody></table></div>`;
+}
 function viewRewards(){
   const s = state.selectedScholarId ? SCHOLARS.find(x=>x.id===state.selectedScholarId) : null;
   const inv=REWARD_COUPONS.filter(c=>state.couponInventoryReward==='all'||c.reward===state.couponInventoryReward);
-  const counts={available:0,active:0,expired:0};
+  const counts={available:0,active:0,expired:0,voided:0};
   inv.forEach(c=>{const st=couponStatus(c); if(counts[st]!==undefined)counts[st]++;});
+  const activeAll=REWARD_COUPONS.filter(c=>couponStatus(c)==='active').length;
+  const expiredAll=REWARD_COUPONS.filter(c=>couponStatus(c)==='expired').length;
   return `
   <div class="card">
-    <h2 style="margin-bottom:6px;">🎟️ Shop On Mane Reward Coupon Checkout</h2>
-    <div class="subtle">Scan/select the scholar first, then scan a preprinted reward coupon. The coupon is assigned to that scholar and the reward points are deducted. When the teacher collects the coupon, scan it again here to return it to inventory.</div>
+    <h2 style="margin-bottom:6px;">🎟️ Shop On Mane Reward Coupon Center</h2>
+    <div class="subtle">Issue reusable coupons, look up returned coupons, track lost cards, and review reward activity from one screen.</div>
+  </div>
+  <div class="grid grid-3">
+    ${statCard(REWARD_COUPONS.length,'Total Coupons')}${statCard(activeAll,'Currently Issued')}${statCard(expiredAll,'Expired / Not Returned')}
   </div>
   ${s?`<div class="card"><strong>${fullName(s)}</strong> — Student ID: <strong>${s.studentId||s.barcodeId||'—'}</strong> · Reward Balance: <strong>${s.rewardBalance}</strong> pts · Savings: <strong>${Number(s.savingsBalance||0)}</strong> pts <button class="btn btn-outline" style="float:right;" onclick="App.clearScholarForRewards()">Change Scholar</button></div>`
     :`<div class="card"><label>Scan/type Student ID or search scholar</label><div style="display:flex;gap:8px;flex-wrap:wrap;"><input id="rewardStudentScan" type="text" placeholder="Scan or type student ID…" onkeydown="if(event.key==='Enter'){App.pickScholarByScan(this.value)}" style="flex:1;min-width:220px;"><button class="btn btn-navy" onclick="App.pickScholarByScan(document.getElementById('rewardStudentScan').value)">Find Scholar</button></div><input id="searchQueryInput" type="text" placeholder="Or search by name…" value="${state.searchQuery}" oninput="App.setSearchQuery(this.value)" style="margin-top:10px;">
       ${state.searchQuery? searchScholars(state.searchQuery).map(sc=>`<div style="padding:6px 0;cursor:pointer;" onclick="App.pickScholarForRewards('${sc.id}')">${fullName(sc)} — ${houseById(sc.houseId).name}</div>`).join('') : ''}
     </div>`}
   <div class="card" style="border:2px solid var(--orange);">
-    <label>${s?'Scan the reward coupon to issue it':'Coupon scanner — select a scholar first to issue; scan an ACTIVE returned coupon anytime to close it'}</label>
+    <h2 style="margin:0 0 6px;">🔎 Coupon Quick Scan</h2>
+    <div class="subtle" style="margin-bottom:8px;">${s?'Scan an AVAILABLE coupon to issue it to the selected scholar. Scan any issued/expired coupon to look it up first.':'Scan any coupon to view its status. Select a scholar first when you are ready to issue an available coupon.'}</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;"><input id="couponScanInput" type="text" placeholder="Scan coupon barcode / enter coupon number…" onkeydown="if(event.key==='Enter'){App.processCouponScan(this.value);this.value='';}" style="flex:1;min-width:260px;" autofocus><button class="btn btn-primary" onclick="const e=document.getElementById('couponScanInput');App.processCouponScan(e.value);e.value='';">Scan Coupon</button></div>
   </div>
+  ${couponLookupCard()}
   <div class="grid grid-3">
-    ${REWARDS.map(r=>{
-      const avail=REWARD_COUPONS.filter(c=>c.reward===r.name&&couponStatus(c)==='available').length;
-      const days=rewardExpirationDays(r.name);
-      return `<div class="card"><div style="font-weight:700;">${hcEsc(r.name)}</div><div class="subtle">${hcEsc(r.cat)} · ${days} day${days===1?'':'s'} valid</div><div class="display" style="font-size:20px;color:var(--orange-dark);margin:8px 0;">${r.cost} pts</div><div class="subtle">🎟️ ${avail} coupon${avail===1?'':'s'} available</div></div>`;
-    }).join('')}
+    ${REWARDS.map(r=>{const avail=REWARD_COUPONS.filter(c=>c.reward===r.name&&couponStatus(c)==='available').length;const days=rewardExpirationDays(r.name);return `<div class="card"><div style="font-weight:700;">${hcEsc(r.name)}</div><div class="subtle">${hcEsc(r.cat)} · ${days} day${days===1?'':'s'} valid</div><div class="display" style="font-size:20px;color:var(--orange-dark);margin:8px 0;">${r.cost} pts</div><div class="subtle">🎟️ ${avail} coupon${avail===1?'':'s'} available</div></div>`;}).join('')}
   </div>
-  ${isAdmin()?`<div class="card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;"><div><h2 style="margin:0;">🎫 Coupon Inventory Manager</h2><div class="subtle">Create and print reusable, uniquely numbered barcode coupons.</div></div><button class="btn btn-primary" onclick="App.createCouponBatch()">+ Create Coupon Batch</button></div>
-    <div class="grid grid-3" style="margin-top:12px;">${statCard(counts.available,'Available')}${statCard(counts.active,'Issued / Active')}${statCard(counts.expired,'Expired / Not Returned')}</div>
-    <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin:12px 0;"><label style="flex:1;min-width:220px;">Reward<select onchange="state.couponInventoryReward=this.value;render()"><option value="all">All Rewards</option>${REWARDS.map(r=>`<option value="${hcEsc(r.name)}" ${state.couponInventoryReward===r.name?'selected':''}>${hcEsc(r.name)}</option>`).join('')}</select></label><button class="btn btn-outline" onclick="App.printCouponSheet()">🖨️ Print Coupon Sheet</button></div>
-    ${inv.length?`<div style="max-height:420px;overflow:auto;"><table><thead><tr><th>Coupon</th><th>Reward</th><th>Pts</th><th>Status</th><th>Assigned Scholar</th><th>Valid Through</th></tr></thead><tbody>${inv.sort((a,b)=>String(a.code).localeCompare(String(b.code))).map(c=>{const st=couponStatus(c),sc=SCHOLARS.find(x=>x.id===c.scholarId);return `<tr><td><strong>${hcEsc(c.code)}</strong></td><td>${hcEsc(c.reward)}</td><td>${c.cost}</td><td><strong>${st.toUpperCase()}</strong></td><td>${sc?hcEsc(fullName(sc)):'—'}</td><td>${c.expiresAt?new Date(c.expiresAt).toLocaleDateString():'—'}</td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty">No coupons created yet. Create a batch for a reward to get started.</div>'}
+  ${isAdmin()?`<div class="card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;"><div><h2 style="margin:0;">🎫 Coupon Inventory Dashboard</h2><div class="subtle">Inventory, lost/void tracking, printing, and activity reporting.</div></div><div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-primary" onclick="App.createCouponBatch()">+ Create Coupon Batch</button><button class="btn btn-outline" onclick="App.printRewardActivityReport(7)">🧾 7-Day Report</button><button class="btn btn-outline" onclick="App.printRewardActivityReport(30)">📊 30-Day Report</button></div></div>
+    <div class="grid grid-2" style="margin-top:12px;">${statCard(counts.available,'Available')}${statCard(counts.active,'Issued / Active')}${statCard(counts.expired,'Expired / Not Returned')}${statCard(counts.voided,'Lost / Voided')}</div>
+    <div style="margin-top:12px;overflow:auto;"><table><thead><tr><th>Reward</th><th>Total</th><th>Available</th><th>Issued</th><th>Expired</th><th>Lost/Void</th></tr></thead><tbody>${REWARDS.map(r=>{const list=REWARD_COUPONS.filter(c=>c.reward===r.name),cc={available:0,active:0,expired:0,voided:0};list.forEach(c=>{const st=couponStatus(c);if(cc[st]!==undefined)cc[st]++;});return `<tr><td><strong>${hcEsc(r.name)}</strong></td><td>${list.length}</td><td>${cc.available}</td><td>${cc.active}</td><td>${cc.expired}</td><td>${cc.voided}</td></tr>`}).join('')}</tbody></table></div>
+    <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin:12px 0;"><label style="flex:1;min-width:220px;">Reward<select onchange="state.couponInventoryReward=this.value;render()"><option value="all">All Rewards</option>${REWARDS.map(r=>`<option value="${hcEsc(r.name)}" ${state.couponInventoryReward===r.name?'selected':''}>${hcEsc(r.name)}</option>`).join('')}</select></label><button class="btn btn-outline" onclick="App.printCouponSheet()">🖨️ Print Coupon Sheet</button><button class="btn btn-outline" onclick="App.exportRewardActivityCSV()">⬇ Export Activity CSV</button></div>
+    ${inv.length?`<div style="max-height:460px;overflow:auto;"><table><thead><tr><th>Coupon</th><th>Reward</th><th>Pts</th><th>Status</th><th>Assigned Scholar</th><th>Valid Through</th><th>Action</th></tr></thead><tbody>${inv.sort((a,b)=>String(a.code).localeCompare(String(b.code))).map(c=>{const st=couponStatus(c),sc=SCHOLARS.find(x=>x.id===c.scholarId);return `<tr><td><strong>${hcEsc(c.code)}</strong></td><td>${hcEsc(c.reward)}</td><td>${c.cost}</td><td><strong>${st.toUpperCase()}</strong></td><td>${sc?hcEsc(fullName(sc)):'—'}</td><td>${c.expiresAt?new Date(c.expiresAt).toLocaleDateString():'—'}</td><td><button class="btn btn-outline" style="padding:5px 8px;font-size:11px;" onclick="state.couponLookupCode='${hcEsc(c.code)}';render();">View</button></td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty">No coupons created yet. Create a batch for a reward to get started.</div>'}
   </div>`:''}`;
 }
 
@@ -2444,50 +2498,77 @@ window.App = {
     const code=String(value||'').trim().toUpperCase();
     if(!code){toast('⚠ Scan or enter a coupon number.');return;}
     const c=REWARD_COUPONS.find(x=>String(x.code||'').toUpperCase()===code);
-    if(!c){toast('⚠ Coupon '+code+' was not found in inventory.');return;}
+    state.couponLookupCode=code;
+    if(!c){toast('⚠ Coupon '+code+' was not found in inventory.');render();return;}
     const st=couponStatus(c);
-    if(st==='active'||st==='expired'){
-      const sc=SCHOLARS.find(x=>x.id===c.scholarId);
-      const msg=(st==='expired'?'This coupon is EXPIRED.\n\n':'')+(c.reward+'\nAssigned to: '+(sc?fullName(sc):'Unknown scholar')+'\n\nMark it USED and return this physical coupon to available inventory?');
-      if(!confirm(msg))return;
-      state.couponBusy=true;
-      try{
-        const now=Date.now();
-        const red=REDEMPTIONS.find(r=>r.couponCode===c.code&&r.status!=='used');
-        if(FIREBASE_ENABLED){
-          const batch=db.batch();
-          batch.update(db.collection('rewardCoupons').doc(c.id),{status:'available',scholarId:null,issuedAt:null,expiresAt:null,lastUsedAt:now});
-          if(red)batch.update(db.collection('redemptions').doc(red.id),{status:'used',usedAt:now});
-          await batch.commit();
-        }
-        c.status='available';c.scholarId=null;c.issuedAt=null;c.expiresAt=null;c.lastUsedAt=now;
-        if(red){red.status='used';red.usedAt=now;}
-        toast('✔ '+c.code+' marked used and returned to inventory.');
-      }catch(err){toast('⚠ Coupon return failed: '+err.message);}
-      finally{state.couponBusy=false;render();}
-      return;
-    }
+    if(st!=='available'){render();return;}
     const sc=SCHOLARS.find(x=>x.id===state.selectedScholarId);
-    if(!sc){toast('⚠ Scan or select a scholar before issuing an available coupon.');return;}
+    if(!sc){toast('✔ Coupon '+c.code+' is AVAILABLE. Select a scholar to issue it.');render();return;}
     const cost=Number(c.cost||0);
-    if(Number(sc.rewardBalance||0)<cost){toast('⚠ '+fullName(sc)+' does not have enough Reward Balance points.');return;}
+    if(Number(sc.rewardBalance||0)<cost){toast('⚠ '+fullName(sc)+' does not have enough Reward Balance points.');render();return;}
     const days=Number(c.expirationDays||rewardExpirationDays(c.reward));
     const now=Date.now(), expires=now+days*24*60*60*1000, newBalance=Number(sc.rewardBalance||0)-cost;
     if(!confirm('Issue '+c.code+' — '+c.reward+' to '+fullName(sc)+' for '+cost+' points?\n\nNew Reward Balance: '+newBalance+' pts\nValid through: '+new Date(expires).toLocaleDateString()))return;
-    const red={id:uid('R'),scholarId:sc.id,reward:c.reward,cost,couponCode:c.code,issuedAt:now,expiresAt:expires,ts:now,status:'active',staffRole:state.role};
+    const red={id:uid('R'),scholarId:sc.id,studentId:sc.studentId||sc.barcodeId||'',scholarName:fullName(sc),houseId:sc.houseId,reward:c.reward,category:c.cat||'',cost,couponCode:c.code,issuedAt:now,expiresAt:expires,ts:now,status:'active',staffRole:state.role,staffName:(state.staffProfile&&state.staffProfile.name)||'',rewardBalanceBefore:Number(sc.rewardBalance||0),rewardBalanceAfter:newBalance};
     state.couponBusy=true;
     try{
       if(FIREBASE_ENABLED){
         const batch=db.batch();
         batch.update(db.collection('scholars').doc(sc.id),{rewardBalance:newBalance});
-        batch.update(db.collection('rewardCoupons').doc(c.id),{status:'active',scholarId:sc.id,issuedAt:now,expiresAt:expires});
+        batch.update(db.collection('rewardCoupons').doc(c.id),{status:'active',scholarId:sc.id,issuedAt:now,expiresAt:expires,voidReason:null});
         batch.set(db.collection('redemptions').doc(red.id),red);
         await batch.commit();
       }
-      sc.rewardBalance=newBalance;c.status='active';c.scholarId=sc.id;c.issuedAt=now;c.expiresAt=expires;REDEMPTIONS.unshift(red);
+      sc.rewardBalance=newBalance;c.status='active';c.scholarId=sc.id;c.issuedAt=now;c.expiresAt=expires;c.voidReason=null;REDEMPTIONS.unshift(red);
       toast('🎟️ '+c.reward+' coupon '+c.code+' issued to '+fullName(sc)+'!');
     }catch(err){toast('⚠ Coupon issue failed: '+err.message);}
     finally{state.couponBusy=false;render();}
+  },
+  async markCouponUsed(id){
+    const c=REWARD_COUPONS.find(x=>x.id===id); if(!c)return;
+    const st=couponStatus(c); if(st!=='active'&&st!=='expired'){toast('⚠ Only issued or expired coupons can be returned.');return;}
+    const sc=SCHOLARS.find(x=>x.id===c.scholarId);
+    if(!confirm((st==='expired'?'This coupon is EXPIRED.\n\n':'')+c.reward+'\nAssigned to: '+(sc?fullName(sc):'Unknown scholar')+'\n\nMark it USED and return the physical coupon to available inventory?'))return;
+    state.couponBusy=true;
+    try{
+      const now=Date.now();
+      const red=REDEMPTIONS.find(r=>r.couponCode===c.code&&r.status==='active');
+      if(FIREBASE_ENABLED){const batch=db.batch();batch.update(db.collection('rewardCoupons').doc(c.id),{status:'available',scholarId:null,issuedAt:null,expiresAt:null,lastUsedAt:now,voidReason:null});if(red)batch.update(db.collection('redemptions').doc(red.id),{status:'used',usedAt:now});await batch.commit();}
+      c.status='available';c.scholarId=null;c.issuedAt=null;c.expiresAt=null;c.lastUsedAt=now;c.voidReason=null;if(red){red.status='used';red.usedAt=now;}state.couponLookupCode=c.code;toast('✔ '+c.code+' marked used and returned to inventory.');
+    }catch(err){toast('⚠ Coupon return failed: '+err.message);}finally{state.couponBusy=false;render();}
+  },
+  async voidCoupon(id){
+    const c=REWARD_COUPONS.find(x=>x.id===id); if(!c)return;
+    const st=couponStatus(c); if(st!=='active'&&st!=='expired'){toast('⚠ Only issued/expired coupons can be marked lost or void.');return;}
+    const reason=(prompt('Why is '+c.code+' being voided?','Lost coupon')||'Lost / voided').trim();
+    if(!confirm('VOID '+c.code+'?\n\nThe coupon will stay blocked and cannot be reassigned unless an admin restores it. Points will NOT be refunded automatically.'))return;
+    const now=Date.now(), red=REDEMPTIONS.find(r=>r.couponCode===c.code&&r.status==='active');
+    try{
+      if(FIREBASE_ENABLED){const batch=db.batch();batch.update(db.collection('rewardCoupons').doc(c.id),{status:'voided',voidedAt:now,voidReason:reason});if(red)batch.update(db.collection('redemptions').doc(red.id),{status:'voided',voidedAt:now,voidReason:reason});await batch.commit();}
+      c.status='voided';c.voidedAt=now;c.voidReason=reason;if(red){red.status='voided';red.voidedAt=now;red.voidReason=reason;}toast('🚫 '+c.code+' is now VOIDED.');render();
+    }catch(err){toast('⚠ Could not void coupon: '+err.message);}
+  },
+  async replaceVoidedCoupon(id){
+    const old=REWARD_COUPONS.find(x=>x.id===id);if(!old||couponStatus(old)!=='voided'||!old.scholarId){toast('⚠ No scholar assignment is available for replacement.');return;}
+    const sc=SCHOLARS.find(x=>x.id===old.scholarId);if(!sc){toast('⚠ Assigned scholar was not found.');return;}
+    const code=String(prompt('Scan or enter an AVAILABLE '+old.reward+' coupon number for the replacement:','')||'').trim().toUpperCase();if(!code)return;
+    const fresh=REWARD_COUPONS.find(x=>String(x.code||'').toUpperCase()===code);if(!fresh){toast('⚠ Replacement coupon not found.');return;}
+    if(fresh.reward!==old.reward){toast('⚠ The replacement must be for '+old.reward+'.');return;}
+    if(couponStatus(fresh)!=='available'){toast('⚠ '+fresh.code+' is not available.');return;}
+    const now=Date.now(), expires=(old.expiresAt&&old.expiresAt>now)?old.expiresAt:now+Number(old.expirationDays||rewardExpirationDays(old.reward))*86400000;
+    if(!confirm('Replace lost/voided '+old.code+' with '+fresh.code+' for '+fullName(sc)+'?\n\nNo additional points will be deducted.\nValid through: '+new Date(expires).toLocaleDateString()))return;
+    const prior=REDEMPTIONS.find(r=>r.couponCode===old.code&&(r.status==='voided'||r.status==='active'));
+    const red={id:uid('R'),scholarId:sc.id,studentId:sc.studentId||sc.barcodeId||'',scholarName:fullName(sc),houseId:sc.houseId,reward:fresh.reward,category:fresh.cat||'',cost:0,originalCost:Number(fresh.cost||0),couponCode:fresh.code,issuedAt:now,expiresAt:expires,ts:now,status:'active',replacement:true,replacementOf:old.code,staffRole:state.role,staffName:(state.staffProfile&&state.staffProfile.name)||''};
+    try{
+      if(FIREBASE_ENABLED){const batch=db.batch();batch.update(db.collection('rewardCoupons').doc(fresh.id),{status:'active',scholarId:sc.id,issuedAt:now,expiresAt:expires,replacementOf:old.code});if(prior)batch.update(db.collection('redemptions').doc(prior.id),{status:'replaced',replacedAt:now,replacementCoupon:fresh.code});batch.set(db.collection('redemptions').doc(red.id),red);await batch.commit();}
+      fresh.status='active';fresh.scholarId=sc.id;fresh.issuedAt=now;fresh.expiresAt=expires;fresh.replacementOf=old.code;if(prior){prior.status='replaced';prior.replacedAt=now;prior.replacementCoupon=fresh.code;}REDEMPTIONS.unshift(red);state.couponLookupCode=fresh.code;toast('✔ Replacement '+fresh.code+' issued with no additional point charge.');render();
+    }catch(err){toast('⚠ Replacement failed: '+err.message);}
+  },
+  async restoreVoidedCoupon(id){
+    if(!isAdmin()){toast('⚠ Admin access required.');return;}
+    const c=REWARD_COUPONS.find(x=>x.id===id); if(!c||couponStatus(c)!=='voided')return;
+    if(!confirm('Restore recovered coupon '+c.code+' to AVAILABLE inventory?\n\nIts old scholar assignment will be cleared.'))return;
+    try{if(FIREBASE_ENABLED)await db.collection('rewardCoupons').doc(c.id).update({status:'available',scholarId:null,issuedAt:null,expiresAt:null,voidReason:null,recoveredAt:Date.now()});c.status='available';c.scholarId=null;c.issuedAt=null;c.expiresAt=null;c.voidReason=null;toast('✔ '+c.code+' restored to available inventory.');render();}catch(err){toast('⚠ Restore failed: '+err.message);}
   },
   async createCouponBatch(){
     if(!isAdmin()){toast('⚠ Admin access required.');return;}
@@ -2513,6 +2594,33 @@ window.App = {
     const w=window.open('','_blank'); if(!w){toast('⚠ Allow pop-ups to print coupons.');return;}
     const cards=list.map((c,i)=>`<div class="coupon"><div class="burst b1">★</div><div class="burst b2">✦</div><div class="burst b3">★</div><div class="top"><div class="lion">🦁</div><div><div class="school">GEORGE WASHINGTON CARVER ACADEMY</div><div class="shop">SHOP ON MANE</div></div><div class="ticket">REWARD PASS</div></div><div class="earned">YOU EARNED IT!</div><div class="reward">${hcEsc(c.reward)}</div><div class="meta"><span class="pts">${c.cost} POINTS</span><span class="cat">${hcEsc(c.cat||'Reward')}</span></div><div class="rule"></div><div class="small">Present this official pass to staff or your teacher. Pass will be collected after use.</div><div class="barcodeWrap"><svg id="bc${i}"></svg></div><div class="code">${hcEsc(c.code)}</div><div class="footer"><span>🦁 LION PRIDE</span><span>•</span><span>EARN • SAVE • ACHIEVE</span></div></div>`).join('');
     w.document.write(`<!doctype html><html><head><title>Shop On Mane Reward Coupons</title><script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\/script><style>@page{size:letter;margin:.3in}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;margin:0;background:#fff;color:#0B1F3A}.grid{display:grid;grid-template-columns:1fr 1fr;gap:.17in}.coupon{position:relative;overflow:hidden;border:3px solid #0B1F3A;border-radius:18px;padding:.13in .15in .12in;text-align:center;break-inside:avoid;min-height:2.35in;background:linear-gradient(145deg,#fff 0%,#fff8ef 55%,#eef3fb 100%);box-shadow:inset 0 0 0 4px #fff,inset 0 0 0 6px #F58220}.coupon:before{content:"";position:absolute;left:-42px;bottom:-58px;width:150px;height:150px;border-radius:50%;background:rgba(245,130,32,.12)}.coupon:after{content:"";position:absolute;right:-52px;top:-65px;width:175px;height:175px;border-radius:50%;background:rgba(11,31,58,.08)}.top{position:relative;z-index:2;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:7px;text-align:left;background:#0B1F3A;color:white;margin:-.13in -.15in 7px;padding:7px 9px;border-bottom:4px solid #F58220}.lion{font-size:25px;line-height:1}.school{font-size:7.5px;font-weight:800;letter-spacing:.35px}.shop{font-size:14px;font-weight:1000;letter-spacing:.7px;color:#FFB36B}.ticket{font-size:8px;font-weight:900;background:#F58220;color:#fff;padding:4px 6px;border-radius:999px;white-space:nowrap}.earned{position:relative;z-index:2;display:inline-block;font-size:8px;font-weight:1000;letter-spacing:1.4px;color:#F58220;background:#0B1F3A;padding:4px 12px;border-radius:999px;margin-top:2px}.reward{position:relative;z-index:2;font-size:23px;line-height:1.05;font-weight:1000;text-transform:uppercase;margin:7px 2px 5px;letter-spacing:-.3px}.meta{position:relative;z-index:2;display:flex;justify-content:center;gap:7px;align-items:center}.pts{font-size:14px;font-weight:1000;color:#fff;background:#F58220;padding:5px 10px;border-radius:9px}.cat{font-size:8px;font-weight:900;text-transform:uppercase;border:1.5px solid #0B1F3A;padding:4px 7px;border-radius:8px;background:white}.rule{position:relative;z-index:2;width:70%;height:2px;background:linear-gradient(90deg,transparent,#F58220,#0B1F3A,#F58220,transparent);margin:7px auto 5px}.small{position:relative;z-index:2;font-size:8px;line-height:1.25;max-width:92%;margin:auto;font-weight:600}.barcodeWrap{position:relative;z-index:2;background:white;border:1px solid #d7dce5;border-radius:8px;padding:3px 7px;margin:6px auto 1px;width:88%}.code{position:relative;z-index:2;font-size:9px;font-weight:1000;letter-spacing:1.2px}.footer{position:relative;z-index:2;display:flex;justify-content:center;gap:5px;margin-top:4px;font-size:6.8px;font-weight:900;letter-spacing:.45px;color:#0B1F3A}.burst{position:absolute;z-index:1;color:#F58220;opacity:.28;font-weight:900}.b1{left:10px;top:58px;font-size:17px;transform:rotate(-15deg)}.b2{right:11px;top:86px;font-size:16px;transform:rotate(15deg)}.b3{right:34px;bottom:18px;font-size:10px}svg{display:block;max-width:100%;height:39px;margin:auto}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}</style></head><body><div class="grid">${cards}</div><script>window.onload=()=>{${list.map((c,i)=>`JsBarcode('#bc${i}',${JSON.stringify(c.code)},{format:'CODE128',displayValue:false,height:38,margin:0,width:1.6});`).join('')}setTimeout(()=>window.print(),300)};<\/script></body></html>`);w.document.close();
+  },
+  setSavingsGoal(id){
+    const sc=SCHOLARS.find(x=>x.id===id); if(!sc)return;
+    const name=prompt('Savings goal name (example: House T-Shirt):',sc.savingsGoalName||''); if(name===null)return;
+    if(!name.trim()){
+      if(confirm('Clear this scholar\'s savings goal?')){if(FIREBASE_ENABLED)db.collection('scholars').doc(id).set({savingsGoalName:'',savingsGoalTarget:0},{merge:true});sc.savingsGoalName='';sc.savingsGoalTarget=0;render();}return;
+    }
+    const target=parseInt(prompt('How many points are needed for this goal?',String(sc.savingsGoalTarget||100)),10);
+    if(!Number.isFinite(target)||target<=0){toast('⚠ Enter a valid goal point amount.');return;}
+    if(FIREBASE_ENABLED)db.collection('scholars').doc(id).set({savingsGoalName:name.trim(),savingsGoalTarget:target},{merge:true}).catch(err=>toast('⚠ Could not save goal: '+err.message));
+    sc.savingsGoalName=name.trim();sc.savingsGoalTarget=target;toast('🎯 Savings goal saved for '+fullName(sc)+'.');render();
+  },
+  printRewardActivityReport(days=30){
+    const cutoff=Date.now()-Number(days)*86400000;
+    const rows=REDEMPTIONS.filter(r=>(r.ts||r.issuedAt||0)>=cutoff).sort((a,b)=>(b.ts||0)-(a.ts||0));
+    const totalPts=rows.reduce((sum,r)=>sum+Number(r.cost||0),0);
+    const used=rows.filter(r=>r.status==='used').length, active=rows.filter(r=>r.status==='active').length, voided=rows.filter(r=>r.status==='voided').length;
+    const popular={};rows.forEach(r=>popular[r.reward]=(popular[r.reward]||0)+1);
+    const top=Object.entries(popular).sort((a,b)=>b[1]-a[1]).slice(0,8);
+    const w=window.open('','_blank');if(!w){toast('⚠ Allow pop-ups to print the report.');return;}
+    w.document.write(`<!doctype html><html><head><title>Shop On Mane ${days}-Day Reward Report</title><style>@page{size:letter;margin:.55in}body{font-family:Arial;color:#0B1F3A}h1{margin:0;color:#0B1F3A}.brand{border-bottom:5px solid #F58220;padding-bottom:12px}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:16px 0}.stat{border:1px solid #ccd3dd;border-radius:10px;padding:10px}.n{font-size:22px;font-weight:800}table{width:100%;border-collapse:collapse;font-size:11px}th,td{padding:7px;border-bottom:1px solid #ddd;text-align:left}th{background:#0B1F3A;color:white}.sub{color:#607086;font-size:12px}</style></head><body><div class="brand"><h1>🦁 Shop On Mane Reward Activity</h1><div class="sub">George Washington Carver Academy · Last ${days} days · Printed ${new Date().toLocaleString()}</div></div><div class="stats"><div class="stat"><div class="n">${rows.length}</div>Coupons Issued</div><div class="stat"><div class="n">${totalPts}</div>Points Spent</div><div class="stat"><div class="n">${used}</div>Used / Returned</div><div class="stat"><div class="n">${active}</div>Still Active</div></div><h2>Most Popular Rewards</h2>${top.length?`<table><tr><th>Reward</th><th>Redemptions</th></tr>${top.map(([n,c])=>`<tr><td>${hcEsc(n)}</td><td>${c}</td></tr>`).join('')}</table>`:'<div class="sub">No reward activity in this period.</div>'}<h2>Activity Detail</h2><table><tr><th>Date</th><th>Scholar</th><th>Reward</th><th>Coupon</th><th>Pts</th><th>Status</th></tr>${rows.map(r=>{const sc=SCHOLARS.find(x=>x.id===r.scholarId);return `<tr><td>${new Date(r.issuedAt||r.ts).toLocaleDateString()}</td><td>${hcEsc(sc?fullName(sc):(r.scholarName||'—'))}</td><td>${hcEsc(r.reward||'')}</td><td>${hcEsc(r.couponCode||'')}</td><td>${Number(r.cost||0)}</td><td>${String(r.status||'active').toUpperCase()}</td></tr>`}).join('')}</table><p class="sub">Voided/Lost: ${voided}</p><script>window.onload=()=>setTimeout(()=>window.print(),250)<\/script></body></html>`);w.document.close();
+  },
+  exportRewardActivityCSV(){
+    const rows=[['Issued Date','Scholar','Student ID','Reward','Category','Coupon','Points','Status','Expires','Used Date','Void Reason']];
+    REDEMPTIONS.slice().sort((a,b)=>(b.ts||0)-(a.ts||0)).forEach(r=>{const sc=SCHOLARS.find(x=>x.id===r.scholarId);rows.push([r.issuedAt?new Date(r.issuedAt).toLocaleString():'',sc?fullName(sc):(r.scholarName||''),sc?(sc.studentId||sc.barcodeId||''):(r.studentId||''),r.reward||'',r.category||'',r.couponCode||'',Number(r.cost||0),r.status||'active',r.expiresAt?new Date(r.expiresAt).toLocaleString():'',r.usedAt?new Date(r.usedAt).toLocaleString():'',r.voidReason||'']);});
+    const csv=rows.map(row=>row.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\n');
+    const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='shop-on-mane-reward-activity-'+new Date().toISOString().slice(0,10)+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),500);toast('✔ Reward activity CSV exported.');
   },
   redeem(){ toast('🎟️ Rewards are issued by scanning a preprinted coupon.'); },
 
@@ -2913,7 +3021,9 @@ window.App = {
               currentPoints:0,
               lifetimePoints:0,
               rewardBalance:0,
-              savingsBalance:0
+              savingsBalance:0,
+              savingsGoalName:'',
+              savingsGoalTarget:0
             });
           });
           await batch.commit();
@@ -2965,7 +3075,9 @@ window.App = {
           currentPoints:0,
           lifetimePoints:0,
           rewardBalance:0,
-          savingsBalance:0
+          savingsBalance:0,
+          savingsGoalName:'',
+          savingsGoalTarget:0
         }));
         TRANSACTIONS = [];
         EVENT_AWARDS = [];
@@ -2978,7 +3090,9 @@ window.App = {
           currentPoints:0,
           lifetimePoints:0,
           rewardBalance:0,
-          savingsBalance:0
+          savingsBalance:0,
+          savingsGoalName:'',
+          savingsGoalTarget:0
         }));
         TRANSACTIONS = [];
         EVENT_AWARDS = [];
