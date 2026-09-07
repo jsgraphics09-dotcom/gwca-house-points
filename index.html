@@ -259,6 +259,7 @@ let TRANSACTIONS=[]; // {id,scholarId,houseId,amount,dir,category,staffRole,note
 let REDEMPTIONS=[];
 let REWARD_COUPONS=[]; // reusable physical reward coupons/cards
 let SAVINGS_TRANSACTIONS=[]; // {id,scholarId,type,amount,fromBalance,toBalance,staffRole,ts}
+let STAFF_ACCOUNTS=[]; // Firestore staff profiles for Access Management
 let SYNC_READY = !FIREBASE_ENABLED;
 
 /* ============================= STATE ============================= */
@@ -318,6 +319,7 @@ const state = {
   authError:null,          // error message to show on the login screen
   loginEmail:'',
   loginPassword:'',
+  accessSearch:'',
 };
 
 function uid(p){return p+Math.random().toString(36).slice(2,9);}
@@ -1938,6 +1940,24 @@ function viewManage(){
     </div>
   </div>
 
+  <div class="card" style="border-top:5px solid var(--navy);">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+      <div><h2 style="margin:0 0 4px;">👥 Access Management</h2><div class="subtle">Create individual staff logins, assign roles and Houses, control point-deduction permission, or disable access without erasing historical activity.</div></div>
+      <button class="btn btn-primary" onclick="App.createStaffAccess()">＋ Add Staff Access</button>
+    </div>
+    <div class="grid grid-3" style="margin-top:14px;">
+      ${statCard(STAFF_ACCOUNTS.length,'Staff Accounts')}
+      ${statCard(STAFF_ACCOUNTS.filter(x=>x.active!==false).length,'Active')}
+      ${statCard(STAFF_ACCOUNTS.filter(x=>x.active===false).length,'Disabled')}
+    </div>
+    <input type="text" placeholder="Search staff name or email…" value="${hcEsc(state.accessSearch||'')}" oninput="App.setAccessSearch(this.value)" style="margin:12px 0 8px;">
+    <div style="overflow-x:auto;"><table><thead><tr><th>Staff Member</th><th>Role</th><th>House</th><th>Subtract</th><th>Status</th><th></th></tr></thead><tbody>
+      ${STAFF_ACCOUNTS.filter(x=>{const q=String(state.accessSearch||'').toLowerCase();return !q||String(x.name||'').toLowerCase().includes(q)||String(x.email||'').toLowerCase().includes(q)}).map(x=>`<tr><td><strong>${hcEsc(x.name||'Unnamed')}</strong><div class="subtle">${hcEsc(x.email||'')}</div></td><td>${ROLE_LABELS[x.role]||x.role||'Teacher / Staff'}</td><td>${x.houseId&&x.houseId!=='all'?houseById(x.houseId).name:'All / None'}</td><td>${x.canSubtract===false?'No':'Yes'}</td><td><strong style="color:${x.active===false?'#B42318':'#16803A'}">${x.active===false?'DISABLED':'ACTIVE'}</strong></td><td style="white-space:nowrap"><button class="btn btn-outline" style="padding:6px 8px;font-size:11px" onclick="App.editStaffAccess('${x.uid}')">Edit</button> <button class="btn btn-outline" style="padding:6px 8px;font-size:11px" onclick="App.sendStaffPasswordReset('${x.uid}')">Reset Password</button> <button class="btn ${x.active===false?'btn-primary':'btn-danger'}" style="padding:6px 8px;font-size:11px" onclick="App.toggleStaffAccess('${x.uid}')">${x.active===false?'Enable':'Disable'}</button></td></tr>`).join('')}
+    </tbody></table></div>
+    ${!STAFF_ACCOUNTS.length?'<div class="empty">No staff profiles are loaded yet. Your current administrator profile will appear once the staff collection syncs.</div>':''}
+    <div class="subtle" style="margin-top:10px;"><strong>Roles:</strong> Administrator = full control · House Admin = House leadership/reporting · Teacher / Staff = scholar lookup and point entry · Student View = limited scholar-facing navigation. Disabled accounts are signed back out of the app.</div>
+  </div>
+
   <div class="grid grid-3" style="align-items:start">
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px">
@@ -2291,6 +2311,47 @@ function render(){
 /* ============================= APP ACTIONS ============================= */
 window.App = {
   setRole(v){ state.role=v; state.tab = v==='student' ? 'scan' : 'dashboard'; state.selectedScholarId=null; render(); },
+  setAccessSearch(v){state.accessSearch=v;render();},
+  async createStaffAccess(){
+    if(!isAdmin()||!FIREBASE_ENABLED){toast('⚠ Administrator live access required.');return;}
+    const name=(prompt('Staff member name:','')||'').trim(); if(!name)return;
+    const email=(prompt('Staff email address:','')||'').trim().toLowerCase(); if(!email||!email.includes('@')){toast('⚠ Enter a valid email address.');return;}
+    const password=prompt('Create a temporary password (at least 6 characters):',''); if(!password||password.length<6){toast('⚠ Password must be at least 6 characters.');return;}
+    const role=(prompt('Role: admin, house_admin, teacher, or student','teacher')||'teacher').trim().toLowerCase();
+    if(!['admin','house_admin','teacher','student'].includes(role)){toast('⚠ Invalid role.');return;}
+    let houseId='all';
+    if(role==='house_admin'){houseId=(prompt('House ID: msaada, uzwelo, juriya, ideas, or iyege','msaada')||'msaada').trim().toLowerCase();if(!HOUSES.some(h=>h.id===houseId)){toast('⚠ Invalid House ID.');return;}}
+    const canSub=role==='teacher'?confirm('Allow this staff member to subtract disciplinary points?'):true;
+    if(!confirm('Create login for '+name+'?\n\n'+email+'\nRole: '+(ROLE_LABELS[role]||role)+(houseId!=='all'?'\nHouse: '+houseById(houseId).name:'')+'\n\nThey will use the temporary password you entered.'))return;
+    try{
+      let secondary; try{secondary=firebase.app('staffCreator');}catch(e){secondary=firebase.initializeApp(firebaseConfig,'staffCreator');}
+      const cred=await secondary.auth().createUserWithEmailAndPassword(email,password);
+      const uidNew=cred.user.uid;
+      await db.collection('staff').doc(uidNew).set({uid:uidNew,name,email,role,houseId,canSubtract:canSub,active:true,createdAt:Date.now(),createdBy:(state.authUser&&state.authUser.uid)||''});
+      await secondary.auth().signOut();
+      toast('✔ Staff login created for '+name+'.'); render();
+    }catch(err){toast('⚠ Could not create staff login: '+err.message);}
+  },
+  async editStaffAccess(uid){
+    if(!isAdmin())return; const x=STAFF_ACCOUNTS.find(a=>a.uid===uid); if(!x)return;
+    const name=(prompt('Staff member name:',x.name||'')||'').trim(); if(!name)return;
+    const role=(prompt('Role: admin, house_admin, teacher, or student',x.role||'teacher')||x.role||'teacher').trim().toLowerCase();
+    if(!['admin','house_admin','teacher','student'].includes(role)){toast('⚠ Invalid role.');return;}
+    let houseId='all'; if(role==='house_admin'){houseId=(prompt('House ID: msaada, uzwelo, juriya, ideas, or iyege',x.houseId&&x.houseId!=='all'?x.houseId:'msaada')||'msaada').trim().toLowerCase();if(!HOUSES.some(h=>h.id===houseId)){toast('⚠ Invalid House ID.');return;}}
+    const canSub=role==='teacher'?confirm('Allow this staff member to subtract disciplinary points?'):true;
+    try{await db.collection('staff').doc(uid).set({name,role,houseId,canSubtract:canSub,updatedAt:Date.now()},{merge:true});toast('✔ Access updated for '+name+'.');}catch(err){toast('⚠ Update failed: '+err.message);}
+  },
+  async sendStaffPasswordReset(uid){
+    if(!isAdmin()||!FIREBASE_ENABLED)return; const x=STAFF_ACCOUNTS.find(a=>a.uid===uid); if(!x||!x.email){toast('⚠ No email address is saved for this staff account.');return;}
+    if(!confirm('Send a password-reset email to '+x.email+'?'))return;
+    try{await firebase.auth().sendPasswordResetEmail(x.email);toast('✔ Password-reset email sent to '+x.email+'.');}catch(err){toast('⚠ Could not send reset email: '+err.message);}
+  },
+  async toggleStaffAccess(uid){
+    if(!isAdmin())return; const x=STAFF_ACCOUNTS.find(a=>a.uid===uid); if(!x)return;
+    if(state.authUser&&state.authUser.uid===uid){toast('⚠ You cannot disable the account you are currently using.');return;}
+    const next=x.active===false; if(!confirm((next?'ENABLE ':'DISABLE ')+(x.name||x.email||'this account')+'?'))return;
+    try{await db.collection('staff').doc(uid).set({active:next,updatedAt:Date.now()},{merge:true});toast('✔ Access '+(next?'enabled.':'disabled.'));}catch(err){toast('⚠ Access change failed: '+err.message);}
+  },
   setLoginEmail(v){ state.loginEmail=v; },
   setLoginPassword(v){ state.loginPassword=v; },
   login(){
@@ -2502,6 +2563,7 @@ window.App = {
     if(!c){toast('⚠ Coupon '+code+' was not found in inventory.');render();return;}
     const st=couponStatus(c);
     if(st!=='available'){render();return;}
+    if(state.role==='student'){toast('ℹ Coupon '+c.code+' is AVAILABLE. Student View cannot issue coupons.');render();return;}
     const sc=SCHOLARS.find(x=>x.id===state.selectedScholarId);
     if(!sc){toast('✔ Coupon '+c.code+' is AVAILABLE. Select a scholar to issue it.');render();return;}
     const cost=Number(c.cost||0);
@@ -3246,6 +3308,16 @@ function startFirebaseSync(){
         }
       }, ()=>{ /* settings doc may not exist yet — fine, houses just use default mascots */ });
 
+      db.collection('staff').onSnapshot(snap=>{
+        STAFF_ACCOUNTS=snap.docs.map(d=>Object.assign({uid:d.id},d.data()||{})).sort((a,b)=>String(a.name||a.email||'').localeCompare(String(b.name||b.email||'')));
+        if(state.authUser){
+          const mine=STAFF_ACCOUNTS.find(x=>x.uid===state.authUser.uid);
+          if(mine&&mine.active===false){toast('⚠ Your access has been disabled.');firebase.auth().signOut();return;}
+          if(mine){state.staffProfile=mine;state.role=mine.role||state.role;}
+        }
+        render();
+      }, err=>console.warn('Staff access sync unavailable:',err.message));
+
       db.collection('settings').doc('pointRewardCatalog').onSnapshot(doc=>{
         if(doc.exists){ normalizePointRewardCatalog(doc.data()); render(); }
       }, err=>{ console.warn('Point/reward settings sync unavailable:',err.message); });
@@ -3269,6 +3341,11 @@ function startAuthListener(){
         return;
       }
       const profile = doc.data();
+      if(profile.active===false){
+        state.authError='Your GWCA House Points access is currently disabled. Contact an administrator.';
+        firebase.auth().signOut();
+        return;
+      }
       state.staffProfile = profile;
       state.role = profile.role || 'teacher';
       state.tab = state.role==='student' ? 'scan' : 'dashboard';
