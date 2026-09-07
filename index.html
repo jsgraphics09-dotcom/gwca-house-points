@@ -277,7 +277,7 @@ const state = {
   globalCamOpen:false,
   moreMenuOpen:false,
   exportFilters:{house:'all',grade:'all',homeroom:'all',status:'all',minPoints:'',maxPoints:'',special:'all',sort:'last'},
-  exportColumns:['studentId','barcodeId','first','last','grade','homeroom','house','currentPoints','lifetimePoints','rewardBalance','savingsBalance','status'],
+  exportColumns:['studentId','barcodeId','first','last','grade','homeroom','house','currentPoints','lifetimePoints','rewardBalance','savingsBalance','scholarEmail','status'],
   exportSelectedIds:[],
   exportSelectionMode:false,
   exportLimit:null,
@@ -406,6 +406,7 @@ function importRowsToScholars(rows){
     const savingsBalance = parseInt(rowGet(row,['savings account','savings balance','savings points'])) || 0;
     const status = (rowGet(row,['status']) || 'active').toLowerCase();
     const notes = rowGet(row,['notes']) || '';
+    const scholarEmail = rowGet(row,['scholar email','student email','school email','email address']);
     const parentName = rowGet(row,['parent name']);
     const parentEmail = rowGet(row,['parent email']);
     const parentPhone = rowGet(row,['parent phone']);
@@ -414,7 +415,7 @@ function importRowsToScholars(rows){
     if(seen[id]) id = id+'_'+i;
     seen[id]=true;
     out.push({id, studentId, barcodeId:barcode, first, last, grade, homeroom, houseId,
-      currentPoints, lifetimePoints, rewardBalance, savingsBalance, status, notes, parentName, parentEmail, parentPhone, lastScan:null});
+      currentPoints, lifetimePoints, rewardBalance, savingsBalance, scholarEmail, status, notes, parentName, parentEmail, parentPhone, lastScan:null});
   });
   return out;
 }
@@ -1588,6 +1589,19 @@ function renderScholarPanel(){
     </div>
     ${badges.length?`<div class="subtle" style="margin-bottom:10px;">🏅 ${badges.join(' · ')}</div>`:''}
 
+    <div class="card" style="background:#FFF9F2;border:1.5px solid #F0D2B4;margin:0 0 12px;">
+      <h2 style="margin:0 0 8px;">✉️ Scholar Email</h2>
+      ${state.role!=='student' ? `
+        <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;">
+          <label style="flex:1;min-width:240px;margin:0;">Email Address
+            <input id="scholarEmailInput" type="email" value="${hcEsc(s.scholarEmail||'')}" placeholder="scholar@school.org" style="margin-top:5px;">
+          </label>
+          <button class="btn btn-primary" onclick="App.saveScholarEmail('${s.id}')">Save Email</button>
+        </div>
+        <div class="subtle" style="margin-top:7px;">This address can be used for future balance statements and account notifications.</div>
+      ` : `<div>${s.scholarEmail?hcEsc(s.scholarEmail):'<span class="subtle">No email address on file.</span>'}</div>`}
+    </div>
+
     <div class="card" style="background:#F7FBFF;border:1.5px solid #C9DCEF;margin:0 0 12px;">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
         <div>
@@ -1928,7 +1942,7 @@ function viewManage(){
 
   <div class="card">
     <h2>Import Roster (CSV or Excel)</h2>
-    <p class="subtle">Upload an updated roster any time (e.g. a refreshed <code>Master_Carver_Roster</code> file). Matches columns named: Barcode ID, Student ID, First Name, Last Name, Grade, House, Teacher Name, Current Points, Lifetime Points, Store Rewards Balance, Savings Account, Parent Name, Parent Email, Parent Phone, Status, Notes. <strong>This replaces the entire current roster. Any scholar not in the uploaded file will be removed from the shared roster. Student photos are stored separately and will automatically reconnect when the same Student ID appears in the new roster.</strong></p>
+    <p class="subtle">Upload an updated roster any time (e.g. a refreshed <code>Master_Carver_Roster</code> file). Matches columns named: Barcode ID, Student ID, First Name, Last Name, Grade, House, Teacher Name, Current Points, Lifetime Points, Store Rewards Balance, Savings Account, Scholar Email, Parent Name, Parent Email, Parent Phone, Status, Notes. <strong>This replaces the entire current roster. Any scholar not in the uploaded file will be removed from the shared roster. Student photos are stored separately and will automatically reconnect when the same Student ID appears in the new roster.</strong></p>
     <input type="file" id="rosterFile" accept=".csv,.xlsx,.xls" onchange="App.importRoster(this.files[0])">
     <div id="importStatus" class="subtle" style="margin-top:8px;"></div>
   </div>
@@ -1964,6 +1978,7 @@ const EXPORT_COLUMNS = [
   {id:'lifetimePoints', label:'Lifetime Points', value:s=>Number(s.lifetimePoints||0)},
   {id:'rewardBalance', label:'Reward Balance', value:s=>Number(s.rewardBalance||0)},
   {id:'savingsBalance', label:'Savings Account', value:s=>Number(s.savingsBalance||0)},
+  {id:'scholarEmail', label:'Scholar Email', value:s=>s.scholarEmail||''},
   {id:'positivePoints', label:'Positive Points', value:s=>exportTxStats(s).positive},
   {id:'negativePoints', label:'Points Deducted', value:s=>exportTxStats(s).negative},
   {id:'transactionCount', label:'Transactions', value:s=>exportTxStats(s).count},
@@ -2501,6 +2516,19 @@ window.App = {
     REWARDS.splice(index,1);
     App.persistPointRewardSettings('Reward removed.');
   },
+  async saveScholarEmail(id){
+    if(state.role==='student'){toast('⚠ Staff access required.');return;}
+    const s=SCHOLARS.find(x=>x.id===id); if(!s)return;
+    const el=document.getElementById('scholarEmailInput');
+    const email=(el?.value||'').trim();
+    if(email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){toast('⚠ Please enter a valid email address.');return;}
+    try{
+      if(FIREBASE_ENABLED) await db.collection('scholars').doc(id).set({scholarEmail:email},{merge:true});
+      s.scholarEmail=email;
+      toast(email?'✔ Scholar email saved.':'✔ Scholar email cleared.');
+      render();
+    }catch(err){toast('⚠ Could not save email: '+err.message);}
+  },
   toggleCamera(){ state.camOpen=!state.camOpen; if(!state.camOpen) stopCamera(); render(); },
   openGlobalSearch(){ state.globalPanel='search'; state.globalSearchQuery=''; render();
     setTimeout(()=>{ const el=document.getElementById('globalSearchInput'); if(el) el.focus(); },50); },
@@ -2535,14 +2563,14 @@ window.App = {
     if(preset==='reward_ready') state.exportFilters.special='reward_ready';
     if(preset==='missing_house') state.exportFilters.special='missing_house';
     if(preset==='barcode') state.exportColumns=['studentId','barcodeId','first','last','grade','homeroom','house'];
-    else if(preset==='all') state.exportColumns=['studentId','barcodeId','first','last','grade','homeroom','house','currentPoints','lifetimePoints','rewardBalance','savingsBalance','status'];
+    else if(preset==='all') state.exportColumns=['studentId','barcodeId','first','last','grade','homeroom','house','currentPoints','lifetimePoints','rewardBalance','savingsBalance','scholarEmail','status'];
     render();
   },
   toggleExportColumn(id,checked){
     const set=new Set(state.exportColumns); checked?set.add(id):set.delete(id); state.exportColumns=[...set]; render();
   },
   exportSelectAllColumns(){ state.exportColumns=EXPORT_COLUMNS.map(c=>c.id); render(); },
-  exportDefaultColumns(){ state.exportColumns=['studentId','barcodeId','first','last','grade','homeroom','house','currentPoints','lifetimePoints','rewardBalance','savingsBalance','status']; render(); },
+  exportDefaultColumns(){ state.exportColumns=['studentId','barcodeId','first','last','grade','homeroom','house','currentPoints','lifetimePoints','rewardBalance','savingsBalance','scholarEmail','status']; render(); },
   toggleExportSelectionMode(checked){ state.exportSelectionMode=checked; if(!checked) state.exportSelectedIds=[]; render(); },
   toggleExportScholar(id,checked){ const set=new Set(state.exportSelectedIds); checked?set.add(id):set.delete(id); state.exportSelectedIds=[...set]; render(); },
   selectAllExportScholars(){
