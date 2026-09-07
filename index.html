@@ -2885,8 +2885,8 @@ window.App = {
     const first = confirm(
       'RESET ALL SCHOLAR & REGULAR HOUSE POINTS?\n\n' +
       'This will set Current Points, Lifetime Points, Store Rewards Balance, and Savings Account to 0 for every scholar, ' +
-      'clear point, savings, and reward redemption history, reset every reward coupon back to AVAILABLE, and remove all regular House/event point awards so every House returns to 0.\n\n' +
-      'The scholar roster, reusable coupon inventory/codes, and the separate House Cup competition system will NOT be deleted.'
+      'clear point, savings, and reward redemption history, DELETE ALL CREATED REWARD COUPONS (including their coupon numbers/barcodes), and remove all regular House/event point awards so every House returns to 0.\n\n' +
+      'The scholar roster and the separate House Cup competition system will NOT be deleted. You will create a fresh coupon inventory after the reset.'
     );
     if(!first) return;
 
@@ -2942,18 +2942,12 @@ window.App = {
           await batch.commit();
         }
 
-        // Reset all reusable physical coupons to AVAILABLE while preserving
-        // their permanent coupon codes so the printed cards can be reused.
+        // Delete the complete reusable coupon inventory. A full reset starts
+        // with no made coupons, coupon numbers, or barcode records.
         const couponSnap = await couponsRef.get();
         for(let i=0;i<couponSnap.docs.length;i+=400){
           const batch = db.batch();
-          couponSnap.docs.slice(i,i+400).forEach(doc=>batch.update(doc.ref,{
-            status:'available',
-            scholarId:null,
-            issuedAt:null,
-            expiresAt:null,
-            lastUsedAt:null
-          }));
+          couponSnap.docs.slice(i,i+400).forEach(doc=>batch.delete(doc.ref));
           await batch.commit();
         }
 
@@ -2977,7 +2971,7 @@ window.App = {
         EVENT_AWARDS = [];
         SAVINGS_TRANSACTIONS = [];
         REDEMPTIONS = [];
-        REWARD_COUPONS = REWARD_COUPONS.map(c=>({...c,status:'available',scholarId:null,issuedAt:null,expiresAt:null,lastUsedAt:null}));
+        REWARD_COUPONS = [];
       } else {
         SCHOLARS = SCHOLARS.map(sc=>({
           ...sc,
@@ -2990,13 +2984,13 @@ window.App = {
         EVENT_AWARDS = [];
         SAVINGS_TRANSACTIONS = [];
         REDEMPTIONS = [];
-        REWARD_COUPONS = REWARD_COUPONS.map(c=>({...c,status:'available',scholarId:null,issuedAt:null,expiresAt:null,lastUsedAt:null}));
+        REWARD_COUPONS = [];
       }
 
       BADGE_SEEN = {};
       LAST_HOUSE_LEADER = null;
       notificationsPrimed = false;
-      toast('✔ Scholar points, savings, reward redemptions, and regular House Points were reset. All reusable coupons are AVAILABLE again. House Cup was not changed.');
+      toast('✔ Full reset complete. Scholar points, savings, reward history, regular House Points, and ALL created reward coupons were erased. House Cup was not changed.');
       render();
     };
 
