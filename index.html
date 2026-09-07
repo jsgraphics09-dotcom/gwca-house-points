@@ -2511,8 +2511,8 @@ window.App = {
     const list=REWARD_COUPONS.filter(c=>couponStatus(c)==='available'&&(state.couponInventoryReward==='all'||c.reward===state.couponInventoryReward));
     if(!list.length){toast('⚠ No available coupons to print for this selection.');return;}
     const w=window.open('','_blank'); if(!w){toast('⚠ Allow pop-ups to print coupons.');return;}
-    const cards=list.map((c,i)=>`<div class="coupon"><div class="school">🦁 GEORGE WASHINGTON CARVER ACADEMY</div><div class="shop">SHOP ON MANE REWARD COUPON</div><div class="reward">${hcEsc(c.reward)}</div><div class="pts">${c.cost} POINTS</div><div class="small">Present to staff/teacher. Coupon will be collected after use.</div><svg id="bc${i}"></svg><div class="code">${hcEsc(c.code)}</div></div>`).join('');
-    w.document.write(`<!doctype html><html><head><title>Shop On Mane Reward Coupons</title><script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\/script><style>@page{size:letter;margin:.35in}body{font-family:Arial,sans-serif;margin:0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:.18in}.coupon{border:2px dashed #1B2A4A;border-radius:10px;padding:.14in;text-align:center;break-inside:avoid;min-height:2.15in}.school{font-size:10px;font-weight:700}.shop{font-size:12px;font-weight:800;color:#D85D0B;margin:4px}.reward{font-size:22px;font-weight:900;margin:8px 0 2px}.pts{font-size:16px;font-weight:800;color:#D85D0B}.small{font-size:9px;margin:7px 0}.code{font-size:10px;font-weight:700}svg{max-width:100%;height:45px}</style></head><body><div class="grid">${cards}</div><script>window.onload=()=>{${list.map((c,i)=>`JsBarcode('#bc${i}',${JSON.stringify(c.code)},{format:'CODE128',displayValue:false,height:42,margin:0});`).join('')}setTimeout(()=>window.print(),250)};<\/script></body></html>`);w.document.close();
+    const cards=list.map((c,i)=>`<div class="coupon"><div class="burst b1">★</div><div class="burst b2">✦</div><div class="burst b3">★</div><div class="top"><div class="lion">🦁</div><div><div class="school">GEORGE WASHINGTON CARVER ACADEMY</div><div class="shop">SHOP ON MANE</div></div><div class="ticket">REWARD PASS</div></div><div class="earned">YOU EARNED IT!</div><div class="reward">${hcEsc(c.reward)}</div><div class="meta"><span class="pts">${c.cost} POINTS</span><span class="cat">${hcEsc(c.cat||'Reward')}</span></div><div class="rule"></div><div class="small">Present this official pass to staff or your teacher. Pass will be collected after use.</div><div class="barcodeWrap"><svg id="bc${i}"></svg></div><div class="code">${hcEsc(c.code)}</div><div class="footer"><span>🦁 LION PRIDE</span><span>•</span><span>EARN • SAVE • ACHIEVE</span></div></div>`).join('');
+    w.document.write(`<!doctype html><html><head><title>Shop On Mane Reward Coupons</title><script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\/script><style>@page{size:letter;margin:.3in}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;margin:0;background:#fff;color:#0B1F3A}.grid{display:grid;grid-template-columns:1fr 1fr;gap:.17in}.coupon{position:relative;overflow:hidden;border:3px solid #0B1F3A;border-radius:18px;padding:.13in .15in .12in;text-align:center;break-inside:avoid;min-height:2.35in;background:linear-gradient(145deg,#fff 0%,#fff8ef 55%,#eef3fb 100%);box-shadow:inset 0 0 0 4px #fff,inset 0 0 0 6px #F58220}.coupon:before{content:"";position:absolute;left:-42px;bottom:-58px;width:150px;height:150px;border-radius:50%;background:rgba(245,130,32,.12)}.coupon:after{content:"";position:absolute;right:-52px;top:-65px;width:175px;height:175px;border-radius:50%;background:rgba(11,31,58,.08)}.top{position:relative;z-index:2;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:7px;text-align:left;background:#0B1F3A;color:white;margin:-.13in -.15in 7px;padding:7px 9px;border-bottom:4px solid #F58220}.lion{font-size:25px;line-height:1}.school{font-size:7.5px;font-weight:800;letter-spacing:.35px}.shop{font-size:14px;font-weight:1000;letter-spacing:.7px;color:#FFB36B}.ticket{font-size:8px;font-weight:900;background:#F58220;color:#fff;padding:4px 6px;border-radius:999px;white-space:nowrap}.earned{position:relative;z-index:2;display:inline-block;font-size:8px;font-weight:1000;letter-spacing:1.4px;color:#F58220;background:#0B1F3A;padding:4px 12px;border-radius:999px;margin-top:2px}.reward{position:relative;z-index:2;font-size:23px;line-height:1.05;font-weight:1000;text-transform:uppercase;margin:7px 2px 5px;letter-spacing:-.3px}.meta{position:relative;z-index:2;display:flex;justify-content:center;gap:7px;align-items:center}.pts{font-size:14px;font-weight:1000;color:#fff;background:#F58220;padding:5px 10px;border-radius:9px}.cat{font-size:8px;font-weight:900;text-transform:uppercase;border:1.5px solid #0B1F3A;padding:4px 7px;border-radius:8px;background:white}.rule{position:relative;z-index:2;width:70%;height:2px;background:linear-gradient(90deg,transparent,#F58220,#0B1F3A,#F58220,transparent);margin:7px auto 5px}.small{position:relative;z-index:2;font-size:8px;line-height:1.25;max-width:92%;margin:auto;font-weight:600}.barcodeWrap{position:relative;z-index:2;background:white;border:1px solid #d7dce5;border-radius:8px;padding:3px 7px;margin:6px auto 1px;width:88%}.code{position:relative;z-index:2;font-size:9px;font-weight:1000;letter-spacing:1.2px}.footer{position:relative;z-index:2;display:flex;justify-content:center;gap:5px;margin-top:4px;font-size:6.8px;font-weight:900;letter-spacing:.45px;color:#0B1F3A}.burst{position:absolute;z-index:1;color:#F58220;opacity:.28;font-weight:900}.b1{left:10px;top:58px;font-size:17px;transform:rotate(-15deg)}.b2{right:11px;top:86px;font-size:16px;transform:rotate(15deg)}.b3{right:34px;bottom:18px;font-size:10px}svg{display:block;max-width:100%;height:39px;margin:auto}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}</style></head><body><div class="grid">${cards}</div><script>window.onload=()=>{${list.map((c,i)=>`JsBarcode('#bc${i}',${JSON.stringify(c.code)},{format:'CODE128',displayValue:false,height:38,margin:0,width:1.6});`).join('')}setTimeout(()=>window.print(),300)};<\/script></body></html>`);w.document.close();
   },
   redeem(){ toast('🎟️ Rewards are issued by scanning a preprinted coupon.'); },
 
@@ -2885,8 +2885,8 @@ window.App = {
     const first = confirm(
       'RESET ALL SCHOLAR & REGULAR HOUSE POINTS?\n\n' +
       'This will set Current Points, Lifetime Points, Store Rewards Balance, and Savings Account to 0 for every scholar, ' +
-      'clear all point transaction history, and remove all regular House/event point awards so every House returns to 0.\n\n' +
-      'The scholar roster and the separate House Cup competition system will NOT be deleted or reset.'
+      'clear point, savings, and reward redemption history, reset every reward coupon back to AVAILABLE, and remove all regular House/event point awards so every House returns to 0.\n\n' +
+      'The scholar roster, reusable coupon inventory/codes, and the separate House Cup competition system will NOT be deleted.'
     );
     if(!first) return;
 
@@ -2902,6 +2902,8 @@ window.App = {
         const txRef = db.collection('transactions');
         const eventAwardsRef = db.collection('eventAwards');
         const savingsRef = db.collection('savingsTransactions');
+        const couponsRef = db.collection('rewardCoupons');
+        const redemptionsRef = db.collection('redemptions');
 
         const scholarSnap = await scholarsRef.get();
         for(let i=0;i<scholarSnap.docs.length;i+=400){
@@ -2940,6 +2942,29 @@ window.App = {
           await batch.commit();
         }
 
+        // Reset all reusable physical coupons to AVAILABLE while preserving
+        // their permanent coupon codes so the printed cards can be reused.
+        const couponSnap = await couponsRef.get();
+        for(let i=0;i<couponSnap.docs.length;i+=400){
+          const batch = db.batch();
+          couponSnap.docs.slice(i,i+400).forEach(doc=>batch.update(doc.ref,{
+            status:'available',
+            scholarId:null,
+            issuedAt:null,
+            expiresAt:null,
+            lastUsedAt:null
+          }));
+          await batch.commit();
+        }
+
+        // A full system reset starts a fresh reward-cycle history.
+        const redemptionSnap = await redemptionsRef.get();
+        for(let i=0;i<redemptionSnap.docs.length;i+=400){
+          const batch = db.batch();
+          redemptionSnap.docs.slice(i,i+400).forEach(doc=>batch.delete(doc.ref));
+          await batch.commit();
+        }
+
         // Also clear local copies immediately while Firestore listeners refresh.
         SCHOLARS = SCHOLARS.map(sc=>({
           ...sc,
@@ -2951,6 +2976,8 @@ window.App = {
         TRANSACTIONS = [];
         EVENT_AWARDS = [];
         SAVINGS_TRANSACTIONS = [];
+        REDEMPTIONS = [];
+        REWARD_COUPONS = REWARD_COUPONS.map(c=>({...c,status:'available',scholarId:null,issuedAt:null,expiresAt:null,lastUsedAt:null}));
       } else {
         SCHOLARS = SCHOLARS.map(sc=>({
           ...sc,
@@ -2962,12 +2989,14 @@ window.App = {
         TRANSACTIONS = [];
         EVENT_AWARDS = [];
         SAVINGS_TRANSACTIONS = [];
+        REDEMPTIONS = [];
+        REWARD_COUPONS = REWARD_COUPONS.map(c=>({...c,status:'available',scholarId:null,issuedAt:null,expiresAt:null,lastUsedAt:null}));
       }
 
       BADGE_SEEN = {};
       LAST_HOUSE_LEADER = null;
       notificationsPrimed = false;
-      toast('✔ Scholar points, savings, regular House Points, rewards, and point history have been reset. House Cup was not changed.');
+      toast('✔ Scholar points, savings, reward redemptions, and regular House Points were reset. All reusable coupons are AVAILABLE again. House Cup was not changed.');
       render();
     };
 
