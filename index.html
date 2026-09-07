@@ -167,7 +167,7 @@ const HOUSES = [
 const UNSORTED_HOUSE = {id:'unsorted', name:'Not Yet Sorted', color:'#8A94A6', mascot:'🎓', value:'—'};
 const houseById = id => HOUSES.find(h=>h.id===id) || UNSORTED_HOUSE;
 
-const POS_CATEGORIES = [
+let POS_CATEGORIES = [
   ['Service',1],['Perseverance',1],['Integrity',1],['Compassion',1],['Equity',1],
   ['Academic Excellence',3],['Academic Improvement',2],['Perfect Attendance',2],
   ['On-Time Arrival',1],['Helping a Teacher',1],['Helping Another Scholar',1],
@@ -177,13 +177,13 @@ const POS_CATEGORIES = [
   ['Teacher Recognition',3],['Principal Recognition',5]
 ].map(([name,pts])=>({name,pts,dir:'positive',noteRequired:false}));
 
-const NEG_CATEGORIES = [
+let NEG_CATEGORIES = [
   ['Disrespect',-2],['Disruptive Behavior',-1],['Uniform Violation',-1],['Tardiness',-1],
   ['Incomplete Work',-1],['Poor Sportsmanship',-2],['House Rule Violation',-1],
   ['Property Misuse',-2],['Other',-1]
 ].map(([name,pts])=>({name,pts,dir:'negative',noteRequired:true}));
 
-const REWARDS = [
+let REWARDS = [
   {name:'Free Dress Day', cost:15, cat:'Privilege'},
   {name:'Homework Pass', cost:10, cat:'Academic'},
   {name:'School Store Credit', cost:20, cat:'Shop'},
@@ -196,6 +196,49 @@ const REWARDS = [
   {name:'House T-Shirt', cost:30, cat:'Spirit'},
   {name:'Gift Card', cost:50, cat:'Shop'},
 ];
+
+
+
+function normalizePointRewardCatalog(data){
+  if(!data || typeof data!=='object') return;
+  if(Array.isArray(data.positiveCategories) && data.positiveCategories.length){
+    POS_CATEGORIES=data.positiveCategories.map(c=>({
+      name:String(c.name||'').trim(),
+      pts:Math.max(1,Math.abs(parseInt(c.pts,10)||1)),
+      dir:'positive', noteRequired:false
+    })).filter(c=>c.name);
+  }
+  if(Array.isArray(data.negativeCategories) && data.negativeCategories.length){
+    NEG_CATEGORIES=data.negativeCategories.map(c=>({
+      name:String(c.name||'').trim(),
+      pts:-Math.max(1,Math.abs(parseInt(c.pts,10)||1)),
+      dir:'negative', noteRequired:c.noteRequired!==false
+    })).filter(c=>c.name);
+  }
+  if(Array.isArray(data.rewards) && data.rewards.length){
+    REWARDS=data.rewards.map(r=>({
+      name:String(r.name||'').trim(),
+      cost:Math.max(1,parseInt(r.cost,10)||1),
+      cat:String(r.cat||'Other').trim()||'Other'
+    })).filter(r=>r.name);
+  }
+}
+function savePointRewardCatalog(){
+  const payload={
+    positiveCategories:POS_CATEGORIES.map(c=>({name:c.name,pts:c.pts})),
+    negativeCategories:NEG_CATEGORIES.map(c=>({name:c.name,pts:c.pts,noteRequired:c.noteRequired!==false})),
+    rewards:REWARDS.map(r=>({name:r.name,cost:r.cost,cat:r.cat||'Other'})),
+    updatedAt:Date.now()
+  };
+  if(FIREBASE_ENABLED){
+    return db.collection('settings').doc('pointRewardCatalog').set(payload,{merge:true});
+  }
+  try{localStorage.setItem('gwcaPointRewardCatalogV1',JSON.stringify(payload));}catch(e){}
+  return Promise.resolve();
+}
+if(!FIREBASE_ENABLED){
+  try{const saved=JSON.parse(localStorage.getItem('gwcaPointRewardCatalogV1')||'null'); normalizePointRewardCatalog(saved);}catch(e){}
+}
 
 const FIRST=['Amara','Jayden','Zola','Marcus','Nia','Elijah','Simone','Kofi','Layla','Isaiah','Aaliyah','Malik','Destiny','Xavier','Imani','Noah','Camille','Terrence','Sadie','Julian'];
 const LAST=['Carter','Brooks','Washington','Freeman','Bailey','Coleman','Reed','Sanders','Fields','Boyd','Grant','Marsh','Pierce','Douglas','Hendrix','Okafor','Nunez','Patel','Kim','Diallo'];
@@ -1764,6 +1807,50 @@ function viewManage(){
   const missingBarcode = SCHOLARS.filter(s=>!s.barcodeId).length;
   const unsorted = SCHOLARS.filter(s=>!s.houseId).length;
   return `<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+      <div>
+        <h2 style="margin-bottom:4px">⚙️ Point & Reward Settings</h2>
+        <div class="subtle">Administrator controls for the Good Behavior, Disciplinary, and Rewards catalogs. Changes apply to future point entries and redemptions only.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-3" style="align-items:start">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px">
+        <h2 style="margin:0;color:var(--green)">🟢 Good Behavior</h2>
+        <button class="btn btn-outline" style="padding:7px 9px;font-size:12px" onclick="App.addPointCategory('positive')">＋ Add</button>
+      </div>
+      <div class="subtle" style="margin-bottom:8px">Positive points awarded to scholars.</div>
+      <table><thead><tr><th>Reason</th><th>Pts</th><th></th></tr></thead><tbody>
+        ${POS_CATEGORIES.map((c,i)=>`<tr><td>${hcEsc(c.name)}</td><td><strong>+${Math.abs(c.pts)}</strong></td><td style="white-space:nowrap"><button class="btn btn-outline" style="padding:5px 7px;font-size:11px" onclick="App.editPointCategory('positive',${i})">Edit</button> <button class="btn btn-danger" style="padding:5px 7px;font-size:11px" onclick="App.removePointCategory('positive',${i})">×</button></td></tr>`).join('')}
+      </tbody></table>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px">
+        <h2 style="margin:0;color:var(--red)">🔴 Disciplinary</h2>
+        <button class="btn btn-outline" style="padding:7px 9px;font-size:12px" onclick="App.addPointCategory('negative')">＋ Add</button>
+      </div>
+      <div class="subtle" style="margin-bottom:8px">Point deductions. Enter the size of the deduction; the app stores it as a negative value.</div>
+      <table><thead><tr><th>Reason</th><th>Pts</th><th></th></tr></thead><tbody>
+        ${NEG_CATEGORIES.map((c,i)=>`<tr><td>${hcEsc(c.name)}</td><td><strong>${c.pts}</strong></td><td style="white-space:nowrap"><button class="btn btn-outline" style="padding:5px 7px;font-size:11px" onclick="App.editPointCategory('negative',${i})">Edit</button> <button class="btn btn-danger" style="padding:5px 7px;font-size:11px" onclick="App.removePointCategory('negative',${i})">×</button></td></tr>`).join('')}
+      </tbody></table>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px">
+        <h2 style="margin:0;color:var(--orange-dark)">🎁 Rewards</h2>
+        <button class="btn btn-outline" style="padding:7px 9px;font-size:12px" onclick="App.addRewardSetting()">＋ Add</button>
+      </div>
+      <div class="subtle" style="margin-bottom:8px">Rewards and the point balance required to redeem them.</div>
+      <table><thead><tr><th>Reward</th><th>Cost</th><th></th></tr></thead><tbody>
+        ${REWARDS.map((r,i)=>`<tr><td>${hcEsc(r.name)}<div class="subtle">${hcEsc(r.cat||'Other')}</div></td><td><strong>${r.cost}</strong></td><td style="white-space:nowrap"><button class="btn btn-outline" style="padding:5px 7px;font-size:11px" onclick="App.editRewardSetting(${i})">Edit</button> <button class="btn btn-danger" style="padding:5px 7px;font-size:11px" onclick="App.removeRewardSetting(${i})">×</button></td></tr>`).join('')}
+      </tbody></table>
+    </div>
+  </div>
+
+  <div class="card">
     <h2>House Crest Images</h2>
     <p class="subtle">Upload a logo or crest for each house to replace the default mascot icon everywhere in the app. Square images work best, and please keep each file under ~500KB.</p>
     <div class="grid grid-3">
@@ -2289,6 +2376,70 @@ window.App = {
     toast('🎉 '+name+' redeemed for '+fullName(s)+'!');
     render();
   },
+  async persistPointRewardSettings(successMessage){
+    try{
+      await savePointRewardCatalog();
+      toast('✔ '+successMessage);
+      render();
+    }catch(err){toast('⚠ Could not save settings: '+err.message);}
+  },
+  addPointCategory(type){
+    if(!isAdmin()){toast('⚠ Admin access required.');return;}
+    const label=type==='positive'?'Good Behavior':'Disciplinary';
+    const name=prompt('New '+label+' reason:');
+    if(!name||!name.trim())return;
+    const raw=prompt(type==='positive'?'How many points should this award?':'How many points should this deduct? (Enter a positive number, such as 2)');
+    if(raw===null)return;
+    const n=Math.max(1,Math.abs(parseInt(raw,10)||0));
+    if(!n){toast('⚠ Enter a valid point amount.');return;}
+    const arr=type==='positive'?POS_CATEGORIES:NEG_CATEGORIES;
+    if(arr.some(c=>c.name.toLowerCase()===name.trim().toLowerCase())){toast('⚠ That reason already exists.');return;}
+    arr.push({name:name.trim(),pts:type==='positive'?n:-n,dir:type,noteRequired:type==='negative'});
+    App.persistPointRewardSettings(label+' reason added.');
+  },
+  editPointCategory(type,index){
+    if(!isAdmin()){toast('⚠ Admin access required.');return;}
+    const arr=type==='positive'?POS_CATEGORIES:NEG_CATEGORIES, c=arr[index]; if(!c)return;
+    const name=prompt('Reason name:',c.name); if(name===null||!name.trim())return;
+    const raw=prompt(type==='positive'?'Points awarded:':'Points deducted (enter a positive number):',String(Math.abs(c.pts)));
+    if(raw===null)return;
+    const n=Math.max(1,Math.abs(parseInt(raw,10)||0)); if(!n){toast('⚠ Enter a valid point amount.');return;}
+    c.name=name.trim(); c.pts=type==='positive'?n:-n; c.dir=type; c.noteRequired=type==='negative';
+    App.persistPointRewardSettings('Point category updated.');
+  },
+  removePointCategory(type,index){
+    if(!isAdmin()){toast('⚠ Admin access required.');return;}
+    const arr=type==='positive'?POS_CATEGORIES:NEG_CATEGORIES, c=arr[index]; if(!c)return;
+    if(!confirm('Remove "'+c.name+'" from future point entry choices?\n\nPast transactions using this reason will remain in history.'))return;
+    arr.splice(index,1);
+    App.persistPointRewardSettings('Point category removed.');
+  },
+  addRewardSetting(){
+    if(!isAdmin()){toast('⚠ Admin access required.');return;}
+    const name=prompt('New reward name:'); if(!name||!name.trim())return;
+    const raw=prompt('Point cost for this reward:'); if(raw===null)return;
+    const cost=Math.max(1,parseInt(raw,10)||0); if(!cost){toast('⚠ Enter a valid point cost.');return;}
+    const cat=(prompt('Reward category (example: Shop, Privilege, Spirit, Treat):','Shop')||'Other').trim()||'Other';
+    REWARDS.push({name:name.trim(),cost,cat});
+    App.persistPointRewardSettings('Reward added.');
+  },
+  editRewardSetting(index){
+    if(!isAdmin()){toast('⚠ Admin access required.');return;}
+    const r=REWARDS[index]; if(!r)return;
+    const name=prompt('Reward name:',r.name); if(name===null||!name.trim())return;
+    const raw=prompt('Point cost:',String(r.cost)); if(raw===null)return;
+    const cost=Math.max(1,parseInt(raw,10)||0); if(!cost){toast('⚠ Enter a valid point cost.');return;}
+    const cat=(prompt('Reward category:',r.cat||'Other')||'Other').trim()||'Other';
+    r.name=name.trim(); r.cost=cost; r.cat=cat;
+    App.persistPointRewardSettings('Reward updated.');
+  },
+  removeRewardSetting(index){
+    if(!isAdmin()){toast('⚠ Admin access required.');return;}
+    const r=REWARDS[index]; if(!r)return;
+    if(!confirm('Remove "'+r.name+'" from the Rewards Catalog?\n\nPast redemptions will remain in history.'))return;
+    REWARDS.splice(index,1);
+    App.persistPointRewardSettings('Reward removed.');
+  },
   toggleCamera(){ state.camOpen=!state.camOpen; if(!state.camOpen) stopCamera(); render(); },
   openGlobalSearch(){ state.globalPanel='search'; state.globalSearchQuery=''; render();
     setTimeout(()=>{ const el=document.getElementById('globalSearchInput'); if(el) el.focus(); },50); },
@@ -2745,6 +2896,10 @@ function startFirebaseSync(){
           render();
         }
       }, ()=>{ /* settings doc may not exist yet — fine, houses just use default mascots */ });
+
+      db.collection('settings').doc('pointRewardCatalog').onSnapshot(doc=>{
+        if(doc.exists){ normalizePointRewardCatalog(doc.data()); render(); }
+      }, err=>{ console.warn('Point/reward settings sync unavailable:',err.message); });
     });
 }
 
