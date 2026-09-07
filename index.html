@@ -11,6 +11,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <style>
   :root{
     --navy:#0B1F3A; --navy-light:#132a4d; --orange:#E8722C; --orange-dark:#c95d1c;
@@ -256,6 +257,7 @@ if(!FIREBASE_ENABLED){
 }
 let TRANSACTIONS=[]; // {id,scholarId,houseId,amount,dir,category,staffRole,note,ts}
 let REDEMPTIONS=[];
+let REWARD_COUPONS=[]; // reusable physical reward coupons/cards
 let SAVINGS_TRANSACTIONS=[]; // {id,scholarId,type,amount,fromBalance,toBalance,staffRole,ts}
 let SYNC_READY = !FIREBASE_ENABLED;
 
@@ -268,6 +270,9 @@ const state = {
   selectedScholarId:null,
   entry:{mode:null, category:null, custom:null, note:'', error:null},
   savingsBusy:false,
+  couponBusy:false,
+  couponScan:'',
+  couponInventoryReward:'all',
   hideLastNames:false,
   toast:null,
   camOpen:false,
@@ -1766,24 +1771,48 @@ function viewBadges(){
   }).join('')}`;
 }
 
+function couponStatus(c){
+  if(c.status==='active' && c.expiresAt && Date.now()>c.expiresAt) return 'expired';
+  return c.status||'available';
+}
+function rewardExpirationDays(name){
+  const r=REWARDS.find(x=>x.name===name);
+  return Number(r?.expirationDays || (String(r?.cat||'').toLowerCase()==='experience'?30:7));
+}
+function couponPrefix(name){
+  const words=String(name||'REWARD').replace(/[^A-Za-z0-9 ]/g,' ').trim().split(/\s+/).filter(Boolean);
+  return (words.map(w=>w[0]).join('').slice(0,4)||'RWD').toUpperCase();
+}
 function viewRewards(){
   const s = state.selectedScholarId ? SCHOLARS.find(x=>x.id===state.selectedScholarId) : null;
+  const inv=REWARD_COUPONS.filter(c=>state.couponInventoryReward==='all'||c.reward===state.couponInventoryReward);
+  const counts={available:0,active:0,expired:0};
+  inv.forEach(c=>{const st=couponStatus(c); if(counts[st]!==undefined)counts[st]++;});
   return `
-  ${s?`<div class="card"><strong>${fullName(s)}</strong> — Reward Balance: <strong>${s.rewardBalance}</strong> pts · Savings: <strong>${Number(s.savingsBalance||0)}</strong> pts <button class="btn btn-outline" style="float:right;" onclick="App.clearScholarForRewards()">Change Scholar</button></div>`
-    :`<div class="card"><label>Select a scholar to redeem for (search below)</label><input id="searchQueryInput" type="text" placeholder="Search scholar…" value="${state.searchQuery}" oninput="App.setSearchQuery(this.value)">
+  <div class="card">
+    <h2 style="margin-bottom:6px;">🎟️ Shop On Mane Reward Coupon Checkout</h2>
+    <div class="subtle">Scan/select the scholar first, then scan a preprinted reward coupon. The coupon is assigned to that scholar and the reward points are deducted. When the teacher collects the coupon, scan it again here to return it to inventory.</div>
+  </div>
+  ${s?`<div class="card"><strong>${fullName(s)}</strong> — Student ID: <strong>${s.studentId||s.barcodeId||'—'}</strong> · Reward Balance: <strong>${s.rewardBalance}</strong> pts · Savings: <strong>${Number(s.savingsBalance||0)}</strong> pts <button class="btn btn-outline" style="float:right;" onclick="App.clearScholarForRewards()">Change Scholar</button></div>`
+    :`<div class="card"><label>Scan/type Student ID or search scholar</label><div style="display:flex;gap:8px;flex-wrap:wrap;"><input id="rewardStudentScan" type="text" placeholder="Scan or type student ID…" onkeydown="if(event.key==='Enter'){App.pickScholarByScan(this.value)}" style="flex:1;min-width:220px;"><button class="btn btn-navy" onclick="App.pickScholarByScan(document.getElementById('rewardStudentScan').value)">Find Scholar</button></div><input id="searchQueryInput" type="text" placeholder="Or search by name…" value="${state.searchQuery}" oninput="App.setSearchQuery(this.value)" style="margin-top:10px;">
       ${state.searchQuery? searchScholars(state.searchQuery).map(sc=>`<div style="padding:6px 0;cursor:pointer;" onclick="App.pickScholarForRewards('${sc.id}')">${fullName(sc)} — ${houseById(sc.houseId).name}</div>`).join('') : ''}
     </div>`}
+  <div class="card" style="border:2px solid var(--orange);">
+    <label>${s?'Scan the reward coupon to issue it':'Coupon scanner — select a scholar first to issue; scan an ACTIVE returned coupon anytime to close it'}</label>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;"><input id="couponScanInput" type="text" placeholder="Scan coupon barcode / enter coupon number…" onkeydown="if(event.key==='Enter'){App.processCouponScan(this.value);this.value='';}" style="flex:1;min-width:260px;" autofocus><button class="btn btn-primary" onclick="const e=document.getElementById('couponScanInput');App.processCouponScan(e.value);e.value='';">Scan Coupon</button></div>
+  </div>
   <div class="grid grid-3">
     ${REWARDS.map(r=>{
-      const affordable = s ? s.rewardBalance>=r.cost : true;
-      return `<div class="card">
-        <div style="font-weight:700;">${r.name}</div>
-        <div class="subtle">${r.cat}</div>
-        <div class="display" style="font-size:20px;color:var(--orange-dark);margin:8px 0;">${r.cost} pts</div>
-        <button class="btn btn-primary btn-block" ${(!s||!affordable)?'disabled':''} onclick="App.redeem('${r.name.replace(/'/g,"\\'")}',${r.cost})">Redeem</button>
-      </div>`;
+      const avail=REWARD_COUPONS.filter(c=>c.reward===r.name&&couponStatus(c)==='available').length;
+      const days=rewardExpirationDays(r.name);
+      return `<div class="card"><div style="font-weight:700;">${hcEsc(r.name)}</div><div class="subtle">${hcEsc(r.cat)} · ${days} day${days===1?'':'s'} valid</div><div class="display" style="font-size:20px;color:var(--orange-dark);margin:8px 0;">${r.cost} pts</div><div class="subtle">🎟️ ${avail} coupon${avail===1?'':'s'} available</div></div>`;
     }).join('')}
-  </div>`;
+  </div>
+  ${isAdmin()?`<div class="card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;"><div><h2 style="margin:0;">🎫 Coupon Inventory Manager</h2><div class="subtle">Create and print reusable, uniquely numbered barcode coupons.</div></div><button class="btn btn-primary" onclick="App.createCouponBatch()">+ Create Coupon Batch</button></div>
+    <div class="grid grid-3" style="margin-top:12px;">${statCard(counts.available,'Available')}${statCard(counts.active,'Issued / Active')}${statCard(counts.expired,'Expired / Not Returned')}</div>
+    <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin:12px 0;"><label style="flex:1;min-width:220px;">Reward<select onchange="state.couponInventoryReward=this.value;render()"><option value="all">All Rewards</option>${REWARDS.map(r=>`<option value="${hcEsc(r.name)}" ${state.couponInventoryReward===r.name?'selected':''}>${hcEsc(r.name)}</option>`).join('')}</select></label><button class="btn btn-outline" onclick="App.printCouponSheet()">🖨️ Print Coupon Sheet</button></div>
+    ${inv.length?`<div style="max-height:420px;overflow:auto;"><table><thead><tr><th>Coupon</th><th>Reward</th><th>Pts</th><th>Status</th><th>Assigned Scholar</th><th>Valid Through</th></tr></thead><tbody>${inv.sort((a,b)=>String(a.code).localeCompare(String(b.code))).map(c=>{const st=couponStatus(c),sc=SCHOLARS.find(x=>x.id===c.scholarId);return `<tr><td><strong>${hcEsc(c.code)}</strong></td><td>${hcEsc(c.reward)}</td><td>${c.cost}</td><td><strong>${st.toUpperCase()}</strong></td><td>${sc?hcEsc(fullName(sc)):'—'}</td><td>${c.expiresAt?new Date(c.expiresAt).toLocaleDateString():'—'}</td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty">No coupons created yet. Create a batch for a reward to get started.</div>'}
+  </div>`:''}`;
 }
 
 function viewHistory(){
@@ -2404,20 +2433,89 @@ window.App = {
   toggleHideNames(){ state.hideLastNames=!state.hideLastNames; render(); },
   clearScholarForRewards(){ state.selectedScholarId=null; state.searchQuery=''; render(); },
   pickScholarForRewards(id){ state.selectedScholarId=id; state.searchQuery=''; render(); },
-  redeem(name,cost){
-    const s = SCHOLARS.find(x=>x.id===state.selectedScholarId);
-    if(!s || s.rewardBalance<cost){ toast('Not enough points for that reward.'); return; }
-    const newBalance = s.rewardBalance - cost;
-    const red = {id:uid('R'), scholarId:s.id, reward:name, ts:Date.now()};
-    if(FIREBASE_ENABLED){
-      db.collection('scholars').doc(s.id).update({rewardBalance:newBalance}).catch(err=>toast('⚠ Sync error: '+err.message));
-      db.collection('redemptions').doc(red.id).set(red).catch(()=>{});
-    }
-    s.rewardBalance = newBalance;
-    REDEMPTIONS.unshift(red);
-    toast('🎉 '+name+' redeemed for '+fullName(s)+'!');
-    render();
+  pickScholarByScan(value){
+    const q=String(value||'').trim().toLowerCase();
+    const sc=SCHOLARS.find(x=>String(x.studentId||'').toLowerCase()===q||String(x.barcodeId||'').toLowerCase()===q);
+    if(!sc){toast('⚠ Scholar not found.');return;}
+    state.selectedScholarId=sc.id; state.searchQuery=''; toast('✔ '+fullName(sc)+' selected.'); render();
   },
+  async processCouponScan(value){
+    if(state.couponBusy)return;
+    const code=String(value||'').trim().toUpperCase();
+    if(!code){toast('⚠ Scan or enter a coupon number.');return;}
+    const c=REWARD_COUPONS.find(x=>String(x.code||'').toUpperCase()===code);
+    if(!c){toast('⚠ Coupon '+code+' was not found in inventory.');return;}
+    const st=couponStatus(c);
+    if(st==='active'||st==='expired'){
+      const sc=SCHOLARS.find(x=>x.id===c.scholarId);
+      const msg=(st==='expired'?'This coupon is EXPIRED.\n\n':'')+(c.reward+'\nAssigned to: '+(sc?fullName(sc):'Unknown scholar')+'\n\nMark it USED and return this physical coupon to available inventory?');
+      if(!confirm(msg))return;
+      state.couponBusy=true;
+      try{
+        const now=Date.now();
+        const red=REDEMPTIONS.find(r=>r.couponCode===c.code&&r.status!=='used');
+        if(FIREBASE_ENABLED){
+          const batch=db.batch();
+          batch.update(db.collection('rewardCoupons').doc(c.id),{status:'available',scholarId:null,issuedAt:null,expiresAt:null,lastUsedAt:now});
+          if(red)batch.update(db.collection('redemptions').doc(red.id),{status:'used',usedAt:now});
+          await batch.commit();
+        }
+        c.status='available';c.scholarId=null;c.issuedAt=null;c.expiresAt=null;c.lastUsedAt=now;
+        if(red){red.status='used';red.usedAt=now;}
+        toast('✔ '+c.code+' marked used and returned to inventory.');
+      }catch(err){toast('⚠ Coupon return failed: '+err.message);}
+      finally{state.couponBusy=false;render();}
+      return;
+    }
+    const sc=SCHOLARS.find(x=>x.id===state.selectedScholarId);
+    if(!sc){toast('⚠ Scan or select a scholar before issuing an available coupon.');return;}
+    const cost=Number(c.cost||0);
+    if(Number(sc.rewardBalance||0)<cost){toast('⚠ '+fullName(sc)+' does not have enough Reward Balance points.');return;}
+    const days=Number(c.expirationDays||rewardExpirationDays(c.reward));
+    const now=Date.now(), expires=now+days*24*60*60*1000, newBalance=Number(sc.rewardBalance||0)-cost;
+    if(!confirm('Issue '+c.code+' — '+c.reward+' to '+fullName(sc)+' for '+cost+' points?\n\nNew Reward Balance: '+newBalance+' pts\nValid through: '+new Date(expires).toLocaleDateString()))return;
+    const red={id:uid('R'),scholarId:sc.id,reward:c.reward,cost,couponCode:c.code,issuedAt:now,expiresAt:expires,ts:now,status:'active',staffRole:state.role};
+    state.couponBusy=true;
+    try{
+      if(FIREBASE_ENABLED){
+        const batch=db.batch();
+        batch.update(db.collection('scholars').doc(sc.id),{rewardBalance:newBalance});
+        batch.update(db.collection('rewardCoupons').doc(c.id),{status:'active',scholarId:sc.id,issuedAt:now,expiresAt:expires});
+        batch.set(db.collection('redemptions').doc(red.id),red);
+        await batch.commit();
+      }
+      sc.rewardBalance=newBalance;c.status='active';c.scholarId=sc.id;c.issuedAt=now;c.expiresAt=expires;REDEMPTIONS.unshift(red);
+      toast('🎟️ '+c.reward+' coupon '+c.code+' issued to '+fullName(sc)+'!');
+    }catch(err){toast('⚠ Coupon issue failed: '+err.message);}
+    finally{state.couponBusy=false;render();}
+  },
+  async createCouponBatch(){
+    if(!isAdmin()){toast('⚠ Admin access required.');return;}
+    const reward=prompt('Enter the reward name exactly as shown in the catalog:\n\n'+REWARDS.map(r=>r.name).join('\n'));
+    if(!reward)return;
+    const r=REWARDS.find(x=>x.name.toLowerCase()===reward.trim().toLowerCase());
+    if(!r){toast('⚠ Reward not found.');return;}
+    const count=parseInt(prompt('How many reusable '+r.name+' coupons should be created?','20'),10);
+    if(!Number.isFinite(count)||count<1||count>200){toast('⚠ Enter a quantity from 1 to 200.');return;}
+    const prefix=(prompt('Coupon prefix',couponPrefix(r.name))||couponPrefix(r.name)).replace(/[^A-Za-z0-9]/g,'').toUpperCase().slice(0,6)||'RWD';
+    const existing=REWARD_COUPONS.filter(c=>String(c.code||'').startsWith(prefix+'-')).map(c=>parseInt(String(c.code).split('-').pop(),10)).filter(Number.isFinite);
+    let n=existing.length?Math.max(...existing)+1:1;
+    const docs=[];
+    for(let i=0;i<count;i++,n++){const code=prefix+'-'+String(n).padStart(4,'0');docs.push({id:'CPN_'+code,code,reward:r.name,cost:Number(r.cost),cat:r.cat||'Other',expirationDays:rewardExpirationDays(r.name),status:'available',createdAt:Date.now()});}
+    try{
+      if(FIREBASE_ENABLED){for(let i=0;i<docs.length;i+=400){const b=db.batch();docs.slice(i,i+400).forEach(c=>b.set(db.collection('rewardCoupons').doc(c.id),c));await b.commit();}}
+      REWARD_COUPONS.push(...docs);state.couponInventoryReward=r.name;toast('✔ Created '+docs.length+' '+r.name+' coupons.');render();
+    }catch(err){toast('⚠ Could not create coupons: '+err.message);}
+  },
+  printCouponSheet(){
+    const list=REWARD_COUPONS.filter(c=>couponStatus(c)==='available'&&(state.couponInventoryReward==='all'||c.reward===state.couponInventoryReward));
+    if(!list.length){toast('⚠ No available coupons to print for this selection.');return;}
+    const w=window.open('','_blank'); if(!w){toast('⚠ Allow pop-ups to print coupons.');return;}
+    const cards=list.map((c,i)=>`<div class="coupon"><div class="school">🦁 GEORGE WASHINGTON CARVER ACADEMY</div><div class="shop">SHOP ON MANE REWARD COUPON</div><div class="reward">${hcEsc(c.reward)}</div><div class="pts">${c.cost} POINTS</div><div class="small">Present to staff/teacher. Coupon will be collected after use.</div><svg id="bc${i}"></svg><div class="code">${hcEsc(c.code)}</div></div>`).join('');
+    w.document.write(`<!doctype html><html><head><title>Shop On Mane Reward Coupons</title><script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\/script><style>@page{size:letter;margin:.35in}body{font-family:Arial,sans-serif;margin:0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:.18in}.coupon{border:2px dashed #1B2A4A;border-radius:10px;padding:.14in;text-align:center;break-inside:avoid;min-height:2.15in}.school{font-size:10px;font-weight:700}.shop{font-size:12px;font-weight:800;color:#D85D0B;margin:4px}.reward{font-size:22px;font-weight:900;margin:8px 0 2px}.pts{font-size:16px;font-weight:800;color:#D85D0B}.small{font-size:9px;margin:7px 0}.code{font-size:10px;font-weight:700}svg{max-width:100%;height:45px}</style></head><body><div class="grid">${cards}</div><script>window.onload=()=>{${list.map((c,i)=>`JsBarcode('#bc${i}',${JSON.stringify(c.code)},{format:'CODE128',displayValue:false,height:42,margin:0});`).join('')}setTimeout(()=>window.print(),250)};<\/script></body></html>`);w.document.close();
+  },
+  redeem(){ toast('🎟️ Rewards are issued by scanning a preprinted coupon.'); },
+
   async moveSavingsPoints(scholarId,type){
     if(state.savingsBusy)return;
     const s=SCHOLARS.find(x=>x.id===scholarId);
@@ -2982,6 +3080,14 @@ function startFirebaseSync(){
         SAVINGS_TRANSACTIONS = snap.docs.map(d=>d.data()).sort((a,b)=>(b.ts||0)-(a.ts||0));
         render();
       }, err=> console.warn('Savings transaction sync unavailable:',err.message));
+      db.collection('rewardCoupons').onSnapshot(snap=>{
+        REWARD_COUPONS = snap.docs.map(d=>d.data());
+        render();
+      }, err=> console.warn('Reward coupon sync unavailable:',err.message));
+      db.collection('redemptions').onSnapshot(snap=>{
+        REDEMPTIONS = snap.docs.map(d=>d.data()).sort((a,b)=>(b.ts||0)-(a.ts||0));
+        render();
+      }, err=> console.warn('Redemption sync unavailable:',err.message));
       eventRef.onSnapshot(snap=>{ EVENT_AWARDS=snap.docs.map(d=>d.data()); render(); },()=>{});
 
       db.collection('studentPhotos').onSnapshot(snap=>{
