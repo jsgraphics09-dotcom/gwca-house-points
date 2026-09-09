@@ -292,7 +292,7 @@ const state = {
   globalScanInput:'',
   globalCamOpen:false,
   moreMenuOpen:false,
-  exportFilters:{house:'all',grade:'all',homeroom:'all',status:'all',minPoints:'',maxPoints:'',special:'all',sort:'last'},
+  exportFilters:{house:'all',grade:'all',homeroom:'all',status:'all',minPoints:'',maxPoints:'',special:'all',sort:'last',sort2:'none'},
   exportColumns:['studentId','barcodeId','first','last','grade','homeroom','house','currentPoints','lifetimePoints','rewardBalance','savingsBalance','scholarEmail','status'],
   exportSelectedIds:[],
   exportSelectionMode:false,
@@ -2145,13 +2145,15 @@ function getExportScholars(){
   const sorters={
     last:(a,b)=>(a.last||'').localeCompare(b.last||''),
     first:(a,b)=>(a.first||'').localeCompare(b.first||''),
-    grade:(a,b)=>String(a.grade||'').localeCompare(String(b.grade||''),undefined,{numeric:true}) || (a.last||'').localeCompare(b.last||''),
-    house:(a,b)=>houseById(a.houseId).name.localeCompare(houseById(b.houseId).name) || (a.last||'').localeCompare(b.last||''),
-    homeroom:(a,b)=>String(a.homeroom||'').localeCompare(String(b.homeroom||'')) || (a.last||'').localeCompare(b.last||''),
+    grade:(a,b)=>String(a.grade||'').localeCompare(String(b.grade||''),undefined,{numeric:true}),
+    house:(a,b)=>houseById(a.houseId).name.localeCompare(houseById(b.houseId).name),
+    homeroom:(a,b)=>String(a.homeroom||'').localeCompare(String(b.homeroom||'')),
     points_desc:(a,b)=>Number(b.currentPoints||0)-Number(a.currentPoints||0),
     points_asc:(a,b)=>Number(a.currentPoints||0)-Number(b.currentPoints||0)
   };
-  rows.sort(sorters[f.sort]||sorters.last);
+  const primarySorter=sorters[f.sort]||sorters.last;
+  const secondarySorter=f.sort2&&f.sort2!=='none' ? sorters[f.sort2] : null;
+  rows.sort((a,b)=>primarySorter(a,b) || (secondarySorter?secondarySorter(a,b):0) || sorters.last(a,b) || sorters.first(a,b));
   if(state.exportLimit) rows=rows.slice(0,state.exportLimit);
   if(state.exportSelectionMode && state.exportSelectedIds.length){
     const picked=new Set(state.exportSelectedIds);
@@ -2212,7 +2214,8 @@ function viewExport(){
       <div><label>Minimum Current Points</label><input type="number" value="${f.minPoints}" placeholder="No minimum" onchange="App.setExportFilter('minPoints',this.value)"></div>
       <div><label>Maximum Current Points</label><input type="number" value="${f.maxPoints}" placeholder="No maximum" onchange="App.setExportFilter('maxPoints',this.value)"></div>
       <div><label>Special Filter</label><select onchange="App.setExportFilter('special',this.value)"><option value="all" ${f.special==='all'?'selected':''}>None</option><option value="zero" ${f.special==='zero'?'selected':''}>Zero Points</option><option value="deductions" ${f.special==='deductions'?'selected':''}>Has Point Deductions</option><option value="reward_ready" ${f.special==='reward_ready'?'selected':''}>Reward Balance 20+</option><option value="missing_house" ${f.special==='missing_house'?'selected':''}>Missing House Assignment</option></select></div>
-      <div><label>Sort By</label><select onchange="App.setExportFilter('sort',this.value)"><option value="last" ${f.sort==='last'?'selected':''}>Last Name</option><option value="first" ${f.sort==='first'?'selected':''}>First Name</option><option value="grade" ${f.sort==='grade'?'selected':''}>Grade</option><option value="house" ${f.sort==='house'?'selected':''}>House</option><option value="homeroom" ${f.sort==='homeroom'?'selected':''}>Teacher</option><option value="points_desc" ${f.sort==='points_desc'?'selected':''}>Highest Points</option><option value="points_asc" ${f.sort==='points_asc'?'selected':''}>Lowest Points</option></select></div>
+      <div><label>Sort By 1</label><select onchange="App.setExportFilter('sort',this.value)"><option value="last" ${f.sort==='last'?'selected':''}>Last Name</option><option value="first" ${f.sort==='first'?'selected':''}>First Name</option><option value="grade" ${f.sort==='grade'?'selected':''}>Grade</option><option value="house" ${f.sort==='house'?'selected':''}>House</option><option value="homeroom" ${f.sort==='homeroom'?'selected':''}>Teacher</option><option value="points_desc" ${f.sort==='points_desc'?'selected':''}>Highest Points</option><option value="points_asc" ${f.sort==='points_asc'?'selected':''}>Lowest Points</option></select></div>
+      <div><label>Sort By 2</label><select onchange="App.setExportFilter('sort2',this.value)"><option value="none" ${f.sort2==='none'?'selected':''}>None</option><option value="last" ${f.sort2==='last'?'selected':''}>Last Name</option><option value="first" ${f.sort2==='first'?'selected':''}>First Name</option><option value="grade" ${f.sort2==='grade'?'selected':''}>Grade</option><option value="house" ${f.sort2==='house'?'selected':''}>House</option><option value="homeroom" ${f.sort2==='homeroom'?'selected':''}>Teacher</option><option value="points_desc" ${f.sort2==='points_desc'?'selected':''}>Highest Points</option><option value="points_asc" ${f.sort2==='points_asc'?'selected':''}>Lowest Points</option></select></div>
       <div style="display:flex;align-items:end;"><button class="btn btn-outline btn-block" onclick="App.clearExportFilters()">Clear Filters</button></div>
     </div>
   </div>
@@ -2904,9 +2907,9 @@ window.App = {
   closeGlobalModal(){ state.globalPanel=null; state.globalCamOpen=false; stopCamera(); render(); },
   toggleGlobalCamera(){ state.globalCamOpen=!state.globalCamOpen; if(!state.globalCamOpen) stopCamera(); render(); },
   setExportFilter(key,value){ state.exportFilters[key]=value; state.exportLimit=null; state.exportSelectedIds=[]; render(); },
-  clearExportFilters(){ state.exportFilters={house:'all',grade:'all',homeroom:'all',status:'all',minPoints:'',maxPoints:'',special:'all',sort:'last'}; state.exportLimit=null; state.exportSelectedIds=[]; render(); },
+  clearExportFilters(){ state.exportFilters={house:'all',grade:'all',homeroom:'all',status:'all',minPoints:'',maxPoints:'',special:'all',sort:'last',sort2:'none'}; state.exportLimit=null; state.exportSelectedIds=[]; render(); },
   exportPreset(preset){
-    state.exportFilters={house:'all',grade:'all',homeroom:'all',status:'all',minPoints:'',maxPoints:'',special:'all',sort:'last'};
+    state.exportFilters={house:'all',grade:'all',homeroom:'all',status:'all',minPoints:'',maxPoints:'',special:'all',sort:'last',sort2:'none'};
     state.exportSelectionMode=false; state.exportSelectedIds=[]; state.exportLimit=null;
     if(preset==='top25'){ state.exportFilters.sort='points_desc'; state.exportLimit=25; }
     if(preset==='zero') state.exportFilters.special='zero';
